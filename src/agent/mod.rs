@@ -1,3 +1,4 @@
+//! 代理引擎模块，实现自主循环、分类与任务分发。
 #[allow(clippy::module_inception)]
 pub mod agent;
 pub mod classifier;

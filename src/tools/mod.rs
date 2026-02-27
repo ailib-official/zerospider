@@ -1,3 +1,4 @@
+//! 工具子系统，定义代理可调用的各种能力接口。
 //! Tool subsystem for agent-callable capabilities.
 //!
 //! This module implements the tool execution surface exposed to the LLM during

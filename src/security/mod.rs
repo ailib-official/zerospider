@@ -1,3 +1,4 @@
+//! 安全子系统，负责策略管理、密钥存储与配对逻辑。
 //! Security subsystem for policy enforcement, sandboxing, and secret management.
 //!
 //! This module provides the security infrastructure for ZeroClaw. The core type

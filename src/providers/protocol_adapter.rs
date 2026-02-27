@@ -1,7 +1,12 @@
 //! Protocol-backed provider adapter.
 //!
-//! Bridges ai-lib-rust's AiClient to ZeroClaw's Provider trait,
+//! Bridges ai-lib-rust's AiClient to ZeroSpider's Provider trait,
 //! enabling protocol-driven provider configuration.
+//! 协议适配器负责将 ai-lib-rust 客户端桥接到本地 Provider 接口。
+//!
+//! Uses ai-lib-rust 0.8+ features:
+//! - `tools_json()` for tool/function calling
+//! - `Error::is_retryable()` / `retry_after()` for automatic retries on rate limits
 
 use crate::providers::traits::{
     ChatMessage, ChatRequest, ChatResponse, Provider, ProviderCapabilities, StreamChunk,
@@ -11,6 +16,10 @@ use crate::tools::ToolSpec;
 use async_trait::async_trait;
 use futures_util::{stream, StreamExt};
 use std::sync::Arc;
+use std::time::Duration;
+
+/// Max retries for retryable protocol errors.
+const MAX_RETRIES: u32 = 2;
 
 pub struct ProtocolBackedProvider {
     client: Arc<ai_lib_rust::AiClient>,
@@ -56,6 +65,63 @@ impl ProtocolBackedProvider {
             })
             .collect()
     }
+
+    /// Run a chat execute with retry on retryable errors.
+    async fn execute_chat_with_retry(
+        client: &ai_lib_rust::AiClient,
+        messages: Vec<ai_lib_rust::Message>,
+        temperature: f64,
+        tools: Option<Vec<serde_json::Value>>,
+    ) -> Result<ai_lib_rust::client::UnifiedResponse, ai_lib_rust::Error> {
+        let mut builder = client
+            .chat()
+            .messages(messages.clone())
+            .temperature(temperature);
+        if let Some(ref t) = tools {
+            if !t.is_empty() {
+                builder = builder.tools_json(t.clone());
+            }
+        }
+        let mut last_err = match builder.execute().await {
+            Ok(r) => return Ok(r),
+            Err(e) => e,
+        };
+        for attempt in 1..=MAX_RETRIES {
+            if !last_err.is_retryable() {
+                break;
+            }
+            if let Some(delay) = last_err.retry_after() {
+                tracing::debug!(
+                    "Protocol retry attempt {} after {:?} (retry_after)",
+                    attempt,
+                    delay
+                );
+                tokio::time::sleep(delay).await;
+            } else {
+                let backoff = Duration::from_millis(500 * (1 << attempt));
+                tracing::debug!(
+                    "Protocol retry attempt {} after {:?} (exponential backoff)",
+                    attempt,
+                    backoff
+                );
+                tokio::time::sleep(backoff).await;
+            }
+            let mut builder = client
+                .chat()
+                .messages(messages.clone())
+                .temperature(temperature);
+            if let Some(ref t) = tools {
+                if !t.is_empty() {
+                    builder = builder.tools_json(t.clone());
+                }
+            }
+            last_err = match builder.execute().await {
+                Ok(r) => return Ok(r),
+                Err(e) => e,
+            };
+        }
+        Err(last_err)
+    }
 }
 
 #[async_trait]
@@ -80,14 +146,10 @@ impl Provider for ProtocolBackedProvider {
         }
         messages.push(ai_lib_rust::Message::user(message));
 
-        let response = self
-            .client
-            .chat()
-            .messages(messages)
-            .temperature(temperature)
-            .execute()
-            .await
-            .map_err(|e| anyhow::anyhow!("Protocol provider error: {}", e))?;
+        let response =
+            Self::execute_chat_with_retry(self.client.as_ref(), messages, temperature, None)
+                .await
+                .map_err(|e| anyhow::anyhow!("Protocol provider error: {}", e))?;
 
         Ok(response.content)
     }
@@ -100,14 +162,10 @@ impl Provider for ProtocolBackedProvider {
     ) -> anyhow::Result<String> {
         let converted = Self::convert_messages(messages);
 
-        let response = self
-            .client
-            .chat()
-            .messages(converted)
-            .temperature(temperature)
-            .execute()
-            .await
-            .map_err(|e| anyhow::anyhow!("Protocol provider error: {}", e))?;
+        let response =
+            Self::execute_chat_with_retry(self.client.as_ref(), converted, temperature, None)
+                .await
+                .map_err(|e| anyhow::anyhow!("Protocol provider error: {}", e))?;
 
         Ok(response.content)
     }
@@ -120,16 +178,26 @@ impl Provider for ProtocolBackedProvider {
     ) -> anyhow::Result<ChatResponse> {
         let converted = Self::convert_messages(request.messages);
 
-        let builder = self
-            .client
-            .chat()
-            .messages(converted)
-            .temperature(temperature);
+        let tools = request.tools.map(|tools| {
+            tools
+                .iter()
+                .map(|t| {
+                    serde_json::json!({
+                        "type": "function",
+                        "function": {
+                            "name": t.name,
+                            "description": t.description,
+                            "parameters": t.parameters
+                        }
+                    })
+                })
+                .collect::<Vec<_>>()
+        });
 
-        let response = builder
-            .execute()
-            .await
-            .map_err(|e| anyhow::anyhow!("Protocol provider error: {}", e))?;
+        let response =
+            Self::execute_chat_with_retry(self.client.as_ref(), converted, temperature, tools)
+                .await
+                .map_err(|e| anyhow::anyhow!("Protocol provider error: {}", e))?;
 
         Ok(ChatResponse {
             text: Some(response.content),
@@ -148,20 +216,22 @@ impl Provider for ProtocolBackedProvider {
     async fn chat_with_tools(
         &self,
         messages: &[ChatMessage],
-        _tools: &[serde_json::Value],
+        tools: &[serde_json::Value],
         _model: &str,
         temperature: f64,
     ) -> anyhow::Result<ChatResponse> {
         let converted = Self::convert_messages(messages);
 
-        let response = self
-            .client
-            .chat()
-            .messages(converted)
-            .temperature(temperature)
-            .execute()
-            .await
-            .map_err(|e| anyhow::anyhow!("Protocol provider error: {}", e))?;
+        let tools_opt = if tools.is_empty() {
+            None
+        } else {
+            Some(tools.to_vec())
+        };
+
+        let response =
+            Self::execute_chat_with_retry(self.client.as_ref(), converted, temperature, tools_opt)
+                .await
+                .map_err(|e| anyhow::anyhow!("Protocol provider error: {}", e))?;
 
         Ok(ChatResponse {
             text: Some(response.content),

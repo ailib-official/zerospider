@@ -1,3 +1,4 @@
+//! ZeroSpider 核心库，定义主要的命令枚举与共享组件。
 #![warn(clippy::all, clippy::pedantic)]
 #![allow(
     clippy::assigning_clones,

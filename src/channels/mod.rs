@@ -1,3 +1,4 @@
+//! 通道子系统，对接 Telegram、Discord 等第三方平台。
 //! Channel subsystem for messaging platform integrations.
 //!
 //! This module provides the multi-channel messaging infrastructure that connects

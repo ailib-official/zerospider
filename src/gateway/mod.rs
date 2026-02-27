@@ -6,6 +6,7 @@
 //! - Request body size limits (64KB max)
 //! - Request timeouts (30s) to prevent slow-loris attacks
 //! - Header sanitization (handled by axum/hyper)
+//! 网关模块负责统一入口与模型调用编排。
 
 use crate::channels::{Channel, LinqChannel, NextcloudTalkChannel, SendMessage, WhatsAppChannel};
 use crate::config::Config;
@@ -313,8 +314,18 @@ pub async fn run_gateway(host: &str, port: u16, config: Config) -> Result<()> {
     let actual_port = listener.local_addr()?.port();
     let display_addr = format!("{host}:{actual_port}");
 
+    let provider_name = config
+        .default_provider
+        .as_deref()
+        .or_else(|| {
+            config
+                .default_model
+                .as_deref()
+                .filter(|model| providers::parse_protocol_provider_model(model).is_some())
+        })
+        .unwrap_or("openrouter");
     let provider: Arc<dyn Provider> = Arc::from(providers::create_resilient_provider_with_options(
-        config.default_provider.as_deref().unwrap_or("openrouter"),
+        provider_name,
         config.api_key.as_deref(),
         config.api_url.as_deref(),
         &config.reliability,
@@ -325,10 +336,11 @@ pub async fn run_gateway(host: &str, port: u16, config: Config) -> Result<()> {
             reasoning_enabled: config.runtime.reasoning_enabled,
         },
     )?);
-    let model = config
-        .default_model
-        .clone()
-        .unwrap_or_else(|| "anthropic/claude-sonnet-4".into());
+    let model = config.default_model.clone().unwrap_or_else(|| {
+        providers::parse_protocol_provider_model(provider_name)
+            .map(|(provider_id, model_id)| format!("{provider_id}/{model_id}"))
+            .unwrap_or_else(|| "anthropic/claude-sonnet-4".into())
+    });
     let temperature = config.default_temperature;
     let mem: Arc<dyn Memory> = Arc::from(memory::create_memory_with_storage(
         &config.memory,

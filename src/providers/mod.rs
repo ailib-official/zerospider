@@ -1,3 +1,4 @@
+//! 提供者子系统，管理不同 AI 模型的连接与负载均衡。
 //! Provider subsystem for model inference backends.
 //!
 //! This module implements the factory pattern for AI model providers. Each provider
@@ -10,6 +11,7 @@
 //! [`ReliableProvider`](reliable::ReliableProvider) wrapper, which handles fallback
 //! chains and automatic retry. Model routing across providers is available via
 //! [`create_routed_provider`].
+//! 提供者模块负责模型连接、切换与容错策略。
 //!
 //! # Extension
 //!
@@ -74,6 +76,7 @@ const QWEN_OAUTH_DEFAULT_CLIENT_ID: &str = "f0304373b74a44d2b584a3fb70ca9e56";
 const QWEN_OAUTH_CREDENTIAL_FILE: &str = ".qwen/oauth_creds.json";
 const ZAI_GLOBAL_BASE_URL: &str = "https://api.z.ai/api/coding/paas/v4";
 const ZAI_CN_BASE_URL: &str = "https://open.bigmodel.cn/api/coding/paas/v4";
+const PROVIDER_MODE_ENV: &str = "ZEROCLAW_PROVIDER_MODE";
 
 pub(crate) fn is_minimax_intl_alias(name: &str) -> bool {
     matches!(
@@ -272,6 +275,14 @@ fn read_non_empty_env(name: &str) -> Option<String> {
         .ok()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
+}
+
+fn protocol_only_mode_enabled() -> bool {
+    read_non_empty_env(PROVIDER_MODE_ENV)
+        .map(|mode| {
+            mode.eq_ignore_ascii_case("protocol-only") || mode.eq_ignore_ascii_case("protocol")
+        })
+        .unwrap_or(false)
 }
 
 fn is_minimax_oauth_placeholder(value: &str) -> bool {
@@ -910,6 +921,34 @@ fn parse_custom_provider_url(
     }
 }
 
+/// Parse protocol provider syntax from either:
+/// - `protocol:provider/model`
+/// - `provider/model` (shorthand)
+pub(crate) fn parse_protocol_provider_model(name: &str) -> Option<(&str, &str)> {
+    let trimmed = name.trim();
+    let rest = if let Some(stripped) = trimmed.strip_prefix("protocol:") {
+        stripped.trim()
+    } else {
+        // Keep custom endpoint syntaxes out of protocol parsing.
+        if trimmed.starts_with("custom:") || trimmed.starts_with("anthropic-custom:") {
+            return None;
+        }
+        // Avoid treating URL-like strings as protocol targets.
+        if trimmed.contains("://") {
+            return None;
+        }
+        trimmed
+    };
+
+    let (provider_id, model_id) = rest.split_once('/')?;
+    let provider_id = provider_id.trim();
+    let model_id = model_id.trim();
+    if provider_id.is_empty() || model_id.is_empty() {
+        return None;
+    }
+    Some((provider_id, model_id))
+}
+
 /// Factory: create the right provider from config (without custom URL)
 pub fn create_provider(name: &str, api_key: Option<&str>) -> anyhow::Result<Box<dyn Provider>> {
     create_provider_with_options(name, api_key, &ProviderRuntimeOptions::default())
@@ -946,6 +985,31 @@ fn create_provider_with_url_and_options(
     api_url: Option<&str>,
     options: &ProviderRuntimeOptions,
 ) -> anyhow::Result<Box<dyn Provider>> {
+    #[cfg(feature = "ai-protocol")]
+    if let Some((provider_id, model_id)) = parse_protocol_provider_model(name) {
+        let key = resolve_provider_credential(provider_id, api_key);
+        #[allow(clippy::option_as_ref_deref)]
+        let key = key.as_ref().map(String::as_str);
+        return Ok(Box::new(protocol_adapter::ProtocolBackedProvider::new(
+            provider_id,
+            model_id,
+            key,
+        )?));
+    }
+
+    #[cfg(not(feature = "ai-protocol"))]
+    if parse_protocol_provider_model(name).is_some() {
+        anyhow::bail!(
+            "Protocol provider requires --features ai-protocol. Build with: cargo build --features ai-protocol"
+        );
+    }
+
+    if protocol_only_mode_enabled() {
+        anyhow::bail!(
+            "Provider mode is protocol-only via {PROVIDER_MODE_ENV}. Use provider/model syntax (e.g. openai/gpt-4o)."
+        );
+    }
+
     let qwen_oauth_context = is_qwen_oauth_alias(name).then(|| resolve_qwen_oauth_context(api_key));
 
     // Resolve credential and break static-analysis taint chain from the
@@ -955,8 +1019,7 @@ fn create_provider_with_url_and_options(
         context.credential.clone()
     } else {
         resolve_provider_credential(name, api_key)
-    }
-    .map(|v| String::from_utf8(v.into_bytes()).unwrap_or_default());
+    };
     #[allow(clippy::option_as_ref_deref)]
     let key = resolved_credential.as_ref().map(String::as_str);
     match name {
@@ -1137,27 +1200,6 @@ fn create_provider_with_url_and_options(
             key,
         ))),
 
-        // ── Protocol-driven provider (ai-lib-rust, requires ai-protocol feature) ──
-        // Format: "protocol:provider_id/model_id" e.g. "protocol:openai/gpt-4o"
-        #[cfg(feature = "ai-protocol")]
-        name if name.starts_with("protocol:") => {
-            let rest = name.strip_prefix("protocol:").unwrap_or("").trim();
-            let (provider_id, model_id) = rest
-                .split_once('/')
-                .map(|(p, m)| (p.trim(), m.trim()))
-                .filter(|(p, m)| !p.is_empty() && !m.is_empty())
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "Protocol provider format: protocol:provider_id/model_id (e.g. protocol:openai/gpt-4o)"
-                    )
-                })?;
-            Ok(Box::new(protocol_adapter::ProtocolBackedProvider::new(
-                provider_id,
-                model_id,
-                key,
-            )?))
-        }
-
         // ── Bring Your Own Provider (custom URL) ───────────
         // Format: "custom:https://your-api.com" or "custom:http://localhost:1234"
         name if name.starts_with("custom:") => {
@@ -1188,18 +1230,11 @@ fn create_provider_with_url_and_options(
             )))
         }
 
-        #[cfg(not(feature = "ai-protocol"))]
-        name if name.starts_with("protocol:") => {
-            anyhow::bail!(
-                "Protocol provider requires --features ai-protocol. Build with: cargo build --features ai-protocol"
-            )
-        }
-
         _ => anyhow::bail!(
             "Unknown provider: {name}. Check README for supported providers or run `zeroclaw onboard --interactive` to reconfigure.\n\
              Tip: Use \"custom:https://your-api.com\" for OpenAI-compatible endpoints.\n\
              Tip: Use \"anthropic-custom:https://your-api.com\" for Anthropic-compatible endpoints.\n\
-             Tip: Use \"protocol:provider/model\" for ai-protocol providers (requires --features ai-protocol)."
+             Tip: Use \"provider/model\" or \"protocol:provider/model\" for ai-protocol providers (requires --features ai-protocol)."
         ),
     }
 }
@@ -1657,6 +1692,17 @@ mod tests {
     fn resolve_provider_credential_prefers_explicit_argument() {
         let resolved = resolve_provider_credential("openrouter", Some("  explicit-key  "));
         assert_eq!(resolved, Some("explicit-key".to_string()));
+    }
+
+    #[test]
+    fn protocol_only_mode_blocks_legacy_provider_names() {
+        let _env_lock = env_lock();
+        let _mode_guard = EnvGuard::set(PROVIDER_MODE_ENV, Some("protocol-only"));
+        let result = create_provider("openai", Some("test-key"));
+        assert!(result.is_err());
+        let message = result.err().expect("must return error").to_string();
+        assert!(message.contains("protocol-only"));
+        assert!(message.contains("provider/model"));
     }
 
     #[test]
@@ -2240,6 +2286,34 @@ mod tests {
         let msg = p.err().unwrap().to_string();
         assert!(msg.contains("Unknown provider"));
         assert!(msg.contains("nonexistent"));
+    }
+
+    #[test]
+    fn parse_protocol_provider_model_accepts_prefixed_and_shorthand() {
+        assert_eq!(
+            parse_protocol_provider_model("protocol:openai/gpt-4o"),
+            Some(("openai", "gpt-4o"))
+        );
+        assert_eq!(
+            parse_protocol_provider_model("openai/gpt-4o-mini"),
+            Some(("openai", "gpt-4o-mini"))
+        );
+        assert!(parse_protocol_provider_model("custom:https://example.com").is_none());
+        assert!(parse_protocol_provider_model("anthropic-custom:https://example.com").is_none());
+        assert!(parse_protocol_provider_model("https://example.com").is_none());
+    }
+
+    #[cfg(not(feature = "ai-protocol"))]
+    #[test]
+    fn factory_protocol_syntax_requires_feature_when_disabled() {
+        let prefixed = create_provider("protocol:openai/gpt-4o", Some("test-key"));
+        let shorthand = create_provider("openai/gpt-4o", Some("test-key"));
+        assert!(prefixed.is_err());
+        assert!(shorthand.is_err());
+        let prefixed_msg = prefixed.err().unwrap().to_string();
+        let shorthand_msg = shorthand.err().unwrap().to_string();
+        assert!(prefixed_msg.contains("requires --features ai-protocol"));
+        assert!(shorthand_msg.contains("requires --features ai-protocol"));
     }
 
     #[test]

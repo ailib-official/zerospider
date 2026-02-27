@@ -1,3 +1,4 @@
+//! ZeroSpider 主入口程序，负责命令行解析与各子系统初始化。
 #![warn(clippy::all, clippy::pedantic)]
 #![allow(
     clippy::assigning_clones,
