@@ -368,9 +368,9 @@ zerospider channel doctor
 
 ### 社区支持
 
-- **GitHub Issues**: https://github.com/hiddenpath/zerospider/issues
-- **文档**: https://github.com/hiddenpath/zerospider#readme
-- **社区论坛**: https://github.com/hiddenpath/zerospider/discussions
+- **GitHub Issues**: https://github.com/ailib-official/zerospider/issues
+- **文档**: https://github.com/ailib-official/zerospider#readme
+- **社区论坛**: https://github.com/ailib-official/zerospider/discussions
 
 ---
 

@@ -11,7 +11,7 @@
 
 ## Overview
 
-ZeroSpider is a Rust-first autonomous AI agent runtime that integrates with the [ai-protocol](https://github.com/hiddenpath/ai-protocol) ecosystem for intelligent, protocol-driven AI operations.
+ZeroSpider is a Rust-first autonomous AI agent runtime that integrates with the [ai-protocol](https://github.com/ailib-official/ai-protocol) ecosystem for intelligent, protocol-driven AI operations.
 
 ### Key Features
 
@@ -37,7 +37,7 @@ ZeroSpider is a Rust-first autonomous AI agent runtime that integrates with the 
 
 ```bash
 # Clone the repository
-git clone https://github.com/hiddenpath/zerospider.git
+git clone https://github.com/ailib-official/zerospider.git
 cd zerospider
 
 # Build with all features
@@ -81,7 +81,7 @@ cargo run --features ai-protocol,smart-routing,multi-model,remote-deploy
 
 ```bash
 # AI Protocol directory (for protocol-driven providers)
-# Clone from: git clone https://github.com/hiddenpath/ai-protocol
+# Clone from: git clone https://github.com/ailib-official/ai-protocol
 export AI_PROTOCOL_DIR=/path/to/ai-protocol
 
 # Provider API keys
@@ -231,7 +231,7 @@ ZeroSpider uses a trait-driven, modular architecture:
 ZeroSpider integrates with:
 
 - [ai-lib-rust](https://crates.io/crates/ai-lib-rust) - Protocol-driven AI API client (crates.io, enable with `--features ai-protocol`)
-- [ai-protocol](https://github.com/hiddenpath/ai-protocol) - Provider YAML configs (clone and set `AI_PROTOCOL_DIR`)
+- [ai-protocol](https://github.com/ailib-official/ai-protocol) - Provider YAML configs (clone and set `AI_PROTOCOL_DIR`)
 
 ### Sync with Upstream
 

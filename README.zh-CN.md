@@ -11,7 +11,7 @@
 
 ## 概述
 
-ZeroSpider 是一个 Rust 优先的自主 AI Agent 运行时，集成了 [ai-protocol](https://github.com/hiddenpath/ai-protocol) 生态系统，实现智能的、协议驱动的 AI 操作。
+ZeroSpider 是一个 Rust 优先的自主 AI Agent 运行时，集成了 [ai-protocol](https://github.com/ailib-official/ai-protocol) 生态系统，实现智能的、协议驱动的 AI 操作。
 
 ### 核心特性
 
@@ -37,7 +37,7 @@ ZeroSpider 是一个 Rust 优先的自主 AI Agent 运行时，集成了 [ai-pro
 
 ```bash
 # 克隆仓库
-git clone https://github.com/hiddenpath/zerospider.git
+git clone https://github.com/ailib-official/zerospider.git
 cd zerospider
 
 # 启用所有功能构建
@@ -81,7 +81,7 @@ cargo run --features ai-protocol,smart-routing,multi-model,remote-deploy
 
 ```bash
 # AI Protocol 目录（用于协议驱动的 Provider）
-# 克隆自：git clone https://github.com/hiddenpath/ai-protocol
+# 克隆自：git clone https://github.com/ailib-official/ai-protocol
 export AI_PROTOCOL_DIR=/path/to/ai-protocol
 
 # Provider API 密钥
@@ -176,7 +176,7 @@ ZeroSpider 使用 trait 驱动的模块化架构：
 ZeroSpider 集成了：
 
 - [ai-lib-rust](https://crates.io/crates/ai-lib-rust) - 协议驱动的 AI API 客户端（crates.io，使用 `--features ai-protocol` 启用）
-- [ai-protocol](https://github.com/hiddenpath/ai-protocol) - Provider YAML 配置（克隆后设置 `AI_PROTOCOL_DIR`）
+- [ai-protocol](https://github.com/ailib-official/ai-protocol) - Provider YAML 配置（克隆后设置 `AI_PROTOCOL_DIR`）
 
 ### 同步上游更新
 

@@ -27,7 +27,7 @@ cargo build --release --features remote-deploy
 ```bash
 # Option 1: Run directly on remote server
 ssh user@remote-server
-wget https://raw.githubusercontent.com/hiddenpath/zerospider/main/bootstrap.sh
+wget https://raw.githubusercontent.com/ailib-official/zerospider/main/bootstrap.sh
 chmod +x bootstrap.sh
 sudo bash bootstrap.sh
 ```

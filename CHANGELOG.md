@@ -30,7 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Project Name**: Renamed from ZeroClaw to ZeroSpider
 - **License**: Dual MIT OR Apache-2.0 license
 - **Author**: Luqiang Wang
-- **Repository**: https://github.com/hiddenpath/zerospider
+- **Repository**: https://github.com/ailib-official/zerospider
 
 ### Security
 - **Cron Tools**: Security policy now passed to cron tools in registry
@@ -147,7 +147,7 @@ Technical Notes:
 - Workspace escape prevention
 - Forbidden system path protection (`/etc`, `/root`, `~/.ssh`)
 
-[0.3.0]: https://github.com/hiddenpath/zerospider/releases/tag/v0.3.0
-[0.2.0]: https://github.com/hiddenpath/zerospider/releases/tag/v0.2.0
-[0.1.1]: https://github.com/hiddenpath/zerospider/releases/tag/v0.1.1
+[0.3.0]: https://github.com/ailib-official/zerospider/releases/tag/v0.3.0
+[0.2.0]: https://github.com/ailib-official/zerospider/releases/tag/v0.2.0
+[0.1.1]: https://github.com/ailib-official/zerospider/releases/tag/v0.1.1
 [0.1.0]: https://github.com/theonlyhennygod/zeroclaw/releases/tag/v0.1.0
