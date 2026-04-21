@@ -56,6 +56,20 @@ zerospider models protocol-models
 zerospider models protocol-providers --json
 ```
 
+## Resilience boundaries (Phase 4)
+
+ZeroSpider layers **two** independent mechanisms; keep them from overlapping in confusing ways:
+
+| Layer | What it does | Where |
+|-------|----------------|--------|
+| **Transport retry** | `ai-lib-rust` returns `Error::is_retryable` / `retry_after` → limited retries inside `ProtocolBackedProvider` (`execute_chat_with_retry`). | `src/providers/protocol_adapter.rs` |
+| **App failover** | `ReliableProvider` switches to another **provider name** or per-model alternatives from config after repeated failures. | `[reliability]` → `fallback_providers`, `model_fallbacks` |
+
+**Guidance**
+
+- Prefer **one** layer to own a given failure class: e.g. let ai-lib handle 429 backoff for a single logical model; use `fallback_providers` when you truly want a different backend (another provider id or `custom:` URL).
+- Optional ai-lib features such as **`routing_mvp`** or **`AiClient::metrics()`** are not required for the manifest path; enable deliberately when you add routing or SLO dashboards.
+
 ## Next steps
 
 See `active/projects/zerospider/ZEROSPIDER_AI_LIB_MIGRATION_PLAN.md` in **ai-lib-plans** for phased PRs (Phase 1 = dependency bump + adapter alignment, etc.).

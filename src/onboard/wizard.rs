@@ -26,6 +26,35 @@ use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+#[cfg(feature = "ai-protocol")]
+fn warn_if_ai_protocol_dir_missing_for_protocol_style_provider(provider_key: &str) {
+    if crate::providers::parse_protocol_provider_model(provider_key).is_none() {
+        return;
+    }
+    let has_usable_local_root = std::env::var("AI_PROTOCOL_DIR")
+        .or_else(|_| std::env::var("AI_PROTOCOL_PATH"))
+        .ok()
+        .and_then(|raw| {
+            let t = raw.trim();
+            if t.is_empty() || t.starts_with("http://") || t.starts_with("https://") {
+                return None;
+            }
+            let p = std::path::Path::new(t);
+            p.is_dir().then_some(())
+        })
+        .is_some();
+    if has_usable_local_root {
+        return;
+    }
+    println!(
+        "{}",
+        style(
+            "Tip: `provider/model` protocol ids need AI_PROTOCOL_DIR (local ai-protocol checkout) for manifest-driven AiClient resolution."
+        )
+        .yellow()
+    );
+}
+
 // ── Project context collected during wizard ──────────────────────
 
 /// User-provided personalization baked into workspace MD files.
@@ -378,6 +407,8 @@ async fn run_quick_setup_with_home(
     fs::create_dir_all(&workspace_dir).context("Failed to create workspace directory")?;
 
     let provider_name = provider.unwrap_or("openrouter").to_string();
+    #[cfg(feature = "ai-protocol")]
+    warn_if_ai_protocol_dir_missing_for_protocol_style_provider(&provider_name);
     let model = model_override
         .map(str::to_string)
         .unwrap_or_else(|| default_model_for_provider(&provider_name));
