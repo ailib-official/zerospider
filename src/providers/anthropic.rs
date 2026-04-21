@@ -926,14 +926,17 @@ mod tests {
     fn should_cache_conversation_short() {
         let messages = vec![
             ChatMessage {
+                tool_call_id: None,
                 role: "system".to_string(),
                 content: "System prompt".to_string(),
             },
             ChatMessage {
+                tool_call_id: None,
                 role: "user".to_string(),
                 content: "Hello".to_string(),
             },
             ChatMessage {
+                tool_call_id: None,
                 role: "assistant".to_string(),
                 content: "Hi".to_string(),
             },
@@ -945,12 +948,14 @@ mod tests {
     #[test]
     fn should_cache_conversation_long() {
         let mut messages = vec![ChatMessage {
+            tool_call_id: None,
             role: "system".to_string(),
             content: "System prompt".to_string(),
         }];
         // Add 5 non-system messages
         for i in 0..5 {
             messages.push(ChatMessage {
+                tool_call_id: None,
                 role: if i % 2 == 0 { "user" } else { "assistant" }.to_string(),
                 content: format!("Message {i}"),
             });
@@ -964,6 +969,7 @@ mod tests {
         // Add exactly 4 non-system messages
         for i in 0..4 {
             messages.push(ChatMessage {
+                tool_call_id: None,
                 role: if i % 2 == 0 { "user" } else { "assistant" }.to_string(),
                 content: format!("Message {i}"),
             });
@@ -972,6 +978,7 @@ mod tests {
 
         // Add one more to cross boundary
         messages.push(ChatMessage {
+            tool_call_id: None,
             role: "user".to_string(),
             content: "One more".to_string(),
         });
@@ -1089,6 +1096,7 @@ mod tests {
     #[test]
     fn convert_messages_small_system_prompt() {
         let messages = vec![ChatMessage {
+            tool_call_id: None,
             role: "system".to_string(),
             content: "Short system prompt".to_string(),
         }];
@@ -1107,6 +1115,7 @@ mod tests {
     fn convert_messages_large_system_prompt() {
         let large_content = "a".repeat(3073);
         let messages = vec![ChatMessage {
+            tool_call_id: None,
             role: "system".to_string(),
             content: large_content.clone(),
         }];
@@ -1157,18 +1166,22 @@ mod tests {
     fn convert_messages_preserves_multi_turn_history() {
         let messages = vec![
             ChatMessage {
+                tool_call_id: None,
                 role: "system".to_string(),
                 content: "You are helpful.".to_string(),
             },
             ChatMessage {
+                tool_call_id: None,
                 role: "user".to_string(),
                 content: "gen a 2 sum in golang".to_string(),
             },
             ChatMessage {
+                tool_call_id: None,
                 role: "assistant".to_string(),
                 content: "```go\nfunc twoSum(nums []int) {}\n```".to_string(),
             },
             ChatMessage {
+                tool_call_id: None,
                 role: "user".to_string(),
                 content: "what's meaning of make here?".to_string(),
             },

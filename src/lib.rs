@@ -60,6 +60,8 @@ pub(crate) mod multimodal;
 pub mod observability;
 pub(crate) mod onboard;
 pub mod peripherals;
+#[cfg(feature = "ai-protocol")]
+pub mod protocol_registry;
 pub mod providers;
 pub mod rag;
 pub mod runtime;

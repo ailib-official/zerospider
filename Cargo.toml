@@ -142,6 +142,12 @@ opentelemetry-otlp = { version = "0.31", default-features = false, features = ["
 # Serial port for peripheral communication (STM32, etc.)
 tokio-serial = { version = "5", default-features = false, optional = true }
 
+# ai-lib-rust — Protocol-driven AI API client (crates.io, optional).
+# Version matrix: see docs/ai-lib-migration.md (target 0.9.x per migration plan).
+ai-lib-rust = { version = "0.9.4", optional = true, features = ["embeddings", "batch", "telemetry"] }
+async-stream = { version = "0.3", optional = true }
+serde_yaml = { version = "0.9", optional = true }
+
 # USB device enumeration (hardware discovery) — only on platforms nusb supports
 # (Linux, macOS, Windows). Android/Termux uses target_os="android" and is excluded.
 [target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))'.dependencies]
@@ -171,11 +177,11 @@ landlock = { version = "0.4", optional = true }
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
-# ai-lib-rust — Protocol-driven AI API client (crates.io, optional)
-ai-lib-rust = { version = "0.8", optional = true, features = ["embeddings", "batch", "telemetry"] }
-
 [features]
-default = []
+# `legacy-providers`: built-in vendor adapters (openrouter, anthropic, custom:, …).
+# Migration plan: prefer `provider/model` + AI_PROTOCOL_DIR; use `--no-default-features` to omit legacy.
+default = ["ai-protocol", "legacy-providers"]
+legacy-providers = []
 hardware = ["nusb", "tokio-serial"]
 channel-matrix = ["dep:matrix-sdk"]
 channel-lark = ["dep:prost"]
@@ -198,7 +204,7 @@ rag-pdf = ["dep:pdf-extract"]
 # whatsapp-web = Native WhatsApp Web client with custom rusqlite storage backend
 whatsapp-web = ["dep:wa-rs", "dep:wa-rs-core", "dep:wa-rs-binary", "dep:wa-rs-proto", "dep:wa-rs-ureq-http", "dep:wa-rs-tokio-transport", "dep:serde-big-array", "dep:prost"]
 # ai-protocol = Protocol-driven providers via ai-lib-rust (requires AI_PROTOCOL_DIR)
-ai-protocol = ["dep:ai-lib-rust"]
+ai-protocol = ["dep:ai-lib-rust", "dep:async-stream", "dep:serde_yaml"]
 # remote-deploy = Controlled remote deployment via SSH
 remote-deploy = []
 

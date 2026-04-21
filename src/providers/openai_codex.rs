@@ -584,18 +584,22 @@ data: [DONE]
     fn build_responses_input_maps_content_types_by_role() {
         let messages = vec![
             ChatMessage {
+                tool_call_id: None,
                 role: "system".into(),
                 content: "You are helpful.".into(),
             },
             ChatMessage {
+                tool_call_id: None,
                 role: "user".into(),
                 content: "Hi".into(),
             },
             ChatMessage {
+                tool_call_id: None,
                 role: "assistant".into(),
                 content: "Hello!".into(),
             },
             ChatMessage {
+                tool_call_id: None,
                 role: "user".into(),
                 content: "Thanks".into(),
             },
@@ -619,6 +623,7 @@ data: [DONE]
     #[test]
     fn build_responses_input_uses_default_instructions_without_system() {
         let messages = vec![ChatMessage {
+            tool_call_id: None,
             role: "user".into(),
             content: "Hello".into(),
         }];
@@ -631,10 +636,12 @@ data: [DONE]
     fn build_responses_input_ignores_unknown_roles() {
         let messages = vec![
             ChatMessage {
+                tool_call_id: None,
                 role: "tool".into(),
                 content: "result".into(),
             },
             ChatMessage {
+                tool_call_id: None,
                 role: "user".into(),
                 content: "Go".into(),
             },

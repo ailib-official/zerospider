@@ -528,10 +528,12 @@ mod tests {
         let provider = OpenRouterProvider::new(None);
         let messages = vec![
             ChatMessage {
+                tool_call_id: None,
                 role: "system".into(),
                 content: "be concise".into(),
             },
             ChatMessage {
+                tool_call_id: None,
                 role: "user".into(),
                 content: "hello".into(),
             },
@@ -574,10 +576,12 @@ mod tests {
     fn chat_request_serializes_history_messages() {
         let messages = [
             ChatMessage {
+                tool_call_id: None,
                 role: "assistant".into(),
                 content: "Previous answer".into(),
             },
             ChatMessage {
+                tool_call_id: None,
                 role: "user".into(),
                 content: "Follow-up".into(),
             },
@@ -624,6 +628,7 @@ mod tests {
     async fn chat_with_tools_fails_without_key() {
         let provider = OpenRouterProvider::new(None);
         let messages = vec![ChatMessage {
+            tool_call_id: None,
             role: "user".into(),
             content: "What is the date?".into(),
         }];
@@ -717,6 +722,7 @@ mod tests {
     #[test]
     fn convert_messages_parses_assistant_tool_call_payload() {
         let messages = vec![ChatMessage {
+            tool_call_id: None,
             role: "assistant".into(),
             content: r#"{"content":"Using tool","tool_calls":[{"id":"call_abc","name":"shell","arguments":"{\"command\":\"pwd\"}"}]}"#
                 .into(),
@@ -737,6 +743,7 @@ mod tests {
     #[test]
     fn convert_messages_parses_tool_result_payload() {
         let messages = vec![ChatMessage {
+            tool_call_id: None,
             role: "tool".into(),
             content: r#"{"tool_call_id":"call_xyz","content":"done"}"#.into(),
         }];

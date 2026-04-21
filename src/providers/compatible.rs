@@ -2302,6 +2302,7 @@ mod tests {
     async fn chat_with_tools_fails_without_key() {
         let p = make_provider("TestProvider", "https://example.com", None);
         let messages = vec![ChatMessage {
+            tool_call_id: None,
             role: "user".to_string(),
             content: "hello".to_string(),
         }];

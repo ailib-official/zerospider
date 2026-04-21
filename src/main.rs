@@ -631,6 +631,18 @@ enum ModelCommands {
         #[arg(long)]
         force: bool,
     },
+    /// List provider manifests discovered under `AI_PROTOCOL_DIR`
+    ProtocolProviders {
+        /// Emit JSON instead of a table
+        #[arg(long)]
+        json: bool,
+    },
+    /// List logical model ids from registries under `AI_PROTOCOL_DIR`
+    ProtocolModels {
+        /// Emit JSON instead of a table
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -954,6 +966,63 @@ async fn main() -> Result<()> {
                 })
                 .await
                 .map_err(|e| anyhow::anyhow!("models refresh task failed: {e}"))?
+            }
+            #[cfg(feature = "ai-protocol")]
+            ModelCommands::ProtocolProviders { json } => {
+                use zerospider::protocol_registry::{
+                    resolve_local_protocol_root, scan_protocol_root,
+                };
+                let Some(root) = resolve_local_protocol_root() else {
+                    anyhow::bail!(
+                        "Set AI_PROTOCOL_DIR to a local ai-protocol checkout (not a URL) to list manifests."
+                    );
+                };
+                let snap = scan_protocol_root(&root)?;
+                if json {
+                    println!("{}", serde_json::to_string_pretty(&snap)?);
+                } else {
+                    println!("Protocol root: {}\n", snap.protocol_root.display());
+                    println!("{:<24} {:<6} {}", "PROVIDER_ID", "OK", "REQUIRED_ENVS");
+                    for p in &snap.providers {
+                        println!(
+                            "{:<24} {:<6} [{}]",
+                            p.id,
+                            if p.available { "yes" } else { "no" },
+                            p.required_envs.join(", ")
+                        );
+                    }
+                }
+                Ok(())
+            }
+            #[cfg(not(feature = "ai-protocol"))]
+            ModelCommands::ProtocolProviders { .. } => {
+                anyhow::bail!("Rebuild with --features ai-protocol to use this command.")
+            }
+            #[cfg(feature = "ai-protocol")]
+            ModelCommands::ProtocolModels { json } => {
+                use zerospider::protocol_registry::{
+                    resolve_local_protocol_root, scan_protocol_root,
+                };
+                let Some(root) = resolve_local_protocol_root() else {
+                    anyhow::bail!(
+                        "Set AI_PROTOCOL_DIR to a local ai-protocol checkout (not a URL) to list models."
+                    );
+                };
+                let snap = scan_protocol_root(&root)?;
+                if json {
+                    println!("{}", serde_json::to_string_pretty(&snap.models)?);
+                } else {
+                    println!("Models under {}:\n", root.display());
+                    println!("{:<40} {}", "LOGICAL_ID", "PROVIDER");
+                    for m in &snap.models {
+                        println!("{:<40} {}", m.logical_id, m.provider);
+                    }
+                }
+                Ok(())
+            }
+            #[cfg(not(feature = "ai-protocol"))]
+            ModelCommands::ProtocolModels { .. } => {
+                anyhow::bail!("Rebuild with --features ai-protocol to use this command.")
             }
         },
 

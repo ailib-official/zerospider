@@ -33,6 +33,8 @@ pub mod traits;
 
 #[cfg(feature = "ai-protocol")]
 pub mod protocol_adapter;
+#[cfg(feature = "ai-protocol")]
+pub use protocol_adapter::resolve_ai_client;
 
 #[allow(unused_imports)]
 pub use traits::{
@@ -1010,19 +1012,32 @@ fn create_provider_with_url_and_options(
         );
     }
 
-    let qwen_oauth_context = is_qwen_oauth_alias(name).then(|| resolve_qwen_oauth_context(api_key));
+    #[cfg(not(feature = "legacy-providers"))]
+    {
+        anyhow::bail!(
+            "Legacy vendor providers are disabled in this build. \
+             Use `provider/model` syntax (for example `openai/gpt-4o-mini`) with `AI_PROTOCOL_DIR` pointing at an ai-protocol checkout, \
+             or rebuild with `--features legacy-providers` for built-in HTTP adapters.\n\
+             Note: `custom:` and `anthropic-custom:` endpoints require legacy-providers."
+        );
+    }
 
-    // Resolve credential and break static-analysis taint chain from the
-    // `api_key` parameter so that downstream provider storage of the value
-    // is not linked to the original sensitive-named source.
-    let resolved_credential = if let Some(context) = qwen_oauth_context.as_ref() {
-        context.credential.clone()
-    } else {
-        resolve_provider_credential(name, api_key)
-    };
-    #[allow(clippy::option_as_ref_deref)]
-    let key = resolved_credential.as_ref().map(String::as_str);
-    match name {
+    #[cfg(feature = "legacy-providers")]
+    {
+        let qwen_oauth_context =
+            is_qwen_oauth_alias(name).then(|| resolve_qwen_oauth_context(api_key));
+
+        // Resolve credential and break static-analysis taint chain from the
+        // `api_key` parameter so that downstream provider storage of the value
+        // is not linked to the original sensitive-named source.
+        let resolved_credential = if let Some(context) = qwen_oauth_context.as_ref() {
+            context.credential.clone()
+        } else {
+            resolve_provider_credential(name, api_key)
+        };
+        #[allow(clippy::option_as_ref_deref)]
+        let key = resolved_credential.as_ref().map(String::as_str);
+        match name {
         // ── Primary providers (custom implementations) ───────
         "openrouter" => Ok(Box::new(openrouter::OpenRouterProvider::new(key))),
         "anthropic" => Ok(Box::new(anthropic::AnthropicProvider::new(key))),
@@ -1236,6 +1251,7 @@ fn create_provider_with_url_and_options(
              Tip: Use \"anthropic-custom:https://your-api.com\" for Anthropic-compatible endpoints.\n\
              Tip: Use \"provider/model\" or \"protocol:provider/model\" for ai-protocol providers (requires --features ai-protocol)."
         ),
+        }
     }
 }
 

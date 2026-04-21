@@ -4,7 +4,7 @@
 //! enabling protocol-driven provider configuration.
 //! 协议适配器负责将 ai-lib-rust 客户端桥接到本地 Provider 接口。
 //!
-//! Uses ai-lib-rust 0.8+ features:
+//! Uses ai-lib-rust 0.9+ features:
 //! - `tools_json()` for tool/function calling
 //! - `Error::is_retryable()` / `retry_after()` for automatic retries on rate limits
 
@@ -19,12 +19,31 @@ use std::sync::Arc;
 use std::time::Duration;
 
 /// Max retries for retryable protocol errors.
+///
+/// Retry policy: only `ai_lib_rust::Error::is_retryable` / `retry_after` drive retries here.
+/// Higher-level resilience (circuit breakers, etc.) belongs in ai-lib contact/policy — do not duplicate.
 const MAX_RETRIES: u32 = 2;
+
+fn effective_model_id(provider_id: &str, model_id: &str, override_model: &str) -> String {
+    let t = override_model.trim();
+    if t.is_empty() {
+        format!("{provider_id}/{model_id}")
+    } else {
+        t.to_string()
+    }
+}
 
 pub struct ProtocolBackedProvider {
     client: Arc<ai_lib_rust::AiClient>,
     provider_id: String,
     model_id: String,
+}
+
+/// Build an [`ai_lib_rust::AiClient`] for a logical model id (`provider/model`).
+pub async fn resolve_ai_client(model_id: &str) -> anyhow::Result<ai_lib_rust::AiClient> {
+    ai_lib_rust::AiClient::new(model_id)
+        .await
+        .map_err(|e| anyhow::anyhow!("AiClient::new({model_id}): {e}"))
 }
 
 impl ProtocolBackedProvider {
@@ -54,6 +73,11 @@ impl ProtocolBackedProvider {
         &self.provider_id
     }
 
+    /// Logical model id for `ChatRequestBuilder::model` — uses `provider/model` unless caller overrides.
+    fn effective_model(&self, override_model: &str) -> String {
+        effective_model_id(&self.provider_id, &self.model_id, override_model)
+    }
+
     fn convert_messages(messages: &[ChatMessage]) -> Vec<ai_lib_rust::Message> {
         messages
             .iter()
@@ -61,6 +85,16 @@ impl ProtocolBackedProvider {
                 "system" => ai_lib_rust::Message::system(&m.content),
                 "user" => ai_lib_rust::Message::user(&m.content),
                 "assistant" => ai_lib_rust::Message::assistant(&m.content),
+                "tool" => {
+                    if let Some(ref id) = m.tool_call_id {
+                        ai_lib_rust::Message::tool(id.as_str(), &m.content)
+                    } else {
+                        ai_lib_rust::Message::user(format!(
+                            "[tool role without tool_call_id] {}",
+                            m.content
+                        ))
+                    }
+                }
                 _ => ai_lib_rust::Message::user(&m.content),
             })
             .collect()
@@ -69,6 +103,7 @@ impl ProtocolBackedProvider {
     /// Run a chat execute with retry on retryable errors.
     async fn execute_chat_with_retry(
         client: &ai_lib_rust::AiClient,
+        logical_model: &str,
         messages: Vec<ai_lib_rust::Message>,
         temperature: f64,
         tools: Option<Vec<serde_json::Value>>,
@@ -76,13 +111,14 @@ impl ProtocolBackedProvider {
         let mut builder = client
             .chat()
             .messages(messages.clone())
-            .temperature(temperature);
+            .temperature(temperature)
+            .model(logical_model);
         if let Some(ref t) = tools {
             if !t.is_empty() {
                 builder = builder.tools_json(t.clone());
             }
         }
-        let mut last_err = match builder.execute().await {
+        let mut last_err: ai_lib_rust::Error = match builder.execute().await {
             Ok(r) => return Ok(r),
             Err(e) => e,
         };
@@ -109,7 +145,8 @@ impl ProtocolBackedProvider {
             let mut builder = client
                 .chat()
                 .messages(messages.clone())
-                .temperature(temperature);
+                .temperature(temperature)
+                .model(logical_model);
             if let Some(ref t) = tools {
                 if !t.is_empty() {
                     builder = builder.tools_json(t.clone());
@@ -137,7 +174,7 @@ impl Provider for ProtocolBackedProvider {
         &self,
         system_prompt: Option<&str>,
         message: &str,
-        _model: &str,
+        model: &str,
         temperature: f64,
     ) -> anyhow::Result<String> {
         let mut messages = Vec::new();
@@ -146,10 +183,16 @@ impl Provider for ProtocolBackedProvider {
         }
         messages.push(ai_lib_rust::Message::user(message));
 
-        let response =
-            Self::execute_chat_with_retry(self.client.as_ref(), messages, temperature, None)
-                .await
-                .map_err(|e| anyhow::anyhow!("Protocol provider error: {}", e))?;
+        let logical = self.effective_model(model);
+        let response = Self::execute_chat_with_retry(
+            self.client.as_ref(),
+            &logical,
+            messages,
+            temperature,
+            None,
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("Protocol provider error: {}", e))?;
 
         Ok(response.content)
     }
@@ -157,15 +200,21 @@ impl Provider for ProtocolBackedProvider {
     async fn chat_with_history(
         &self,
         messages: &[ChatMessage],
-        _model: &str,
+        model: &str,
         temperature: f64,
     ) -> anyhow::Result<String> {
         let converted = Self::convert_messages(messages);
 
-        let response =
-            Self::execute_chat_with_retry(self.client.as_ref(), converted, temperature, None)
-                .await
-                .map_err(|e| anyhow::anyhow!("Protocol provider error: {}", e))?;
+        let logical = self.effective_model(model);
+        let response = Self::execute_chat_with_retry(
+            self.client.as_ref(),
+            &logical,
+            converted,
+            temperature,
+            None,
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("Protocol provider error: {}", e))?;
 
         Ok(response.content)
     }
@@ -173,7 +222,7 @@ impl Provider for ProtocolBackedProvider {
     async fn chat(
         &self,
         request: ChatRequest<'_>,
-        _model: &str,
+        model: &str,
         temperature: f64,
     ) -> anyhow::Result<ChatResponse> {
         let converted = Self::convert_messages(request.messages);
@@ -194,10 +243,16 @@ impl Provider for ProtocolBackedProvider {
                 .collect::<Vec<_>>()
         });
 
-        let response =
-            Self::execute_chat_with_retry(self.client.as_ref(), converted, temperature, tools)
-                .await
-                .map_err(|e| anyhow::anyhow!("Protocol provider error: {}", e))?;
+        let logical = self.effective_model(model);
+        let response = Self::execute_chat_with_retry(
+            self.client.as_ref(),
+            &logical,
+            converted,
+            temperature,
+            tools,
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("Protocol provider error: {}", e))?;
 
         Ok(ChatResponse {
             text: Some(response.content),
@@ -217,7 +272,7 @@ impl Provider for ProtocolBackedProvider {
         &self,
         messages: &[ChatMessage],
         tools: &[serde_json::Value],
-        _model: &str,
+        model: &str,
         temperature: f64,
     ) -> anyhow::Result<ChatResponse> {
         let converted = Self::convert_messages(messages);
@@ -228,10 +283,16 @@ impl Provider for ProtocolBackedProvider {
             Some(tools.to_vec())
         };
 
-        let response =
-            Self::execute_chat_with_retry(self.client.as_ref(), converted, temperature, tools_opt)
-                .await
-                .map_err(|e| anyhow::anyhow!("Protocol provider error: {}", e))?;
+        let logical = self.effective_model(model);
+        let response = Self::execute_chat_with_retry(
+            self.client.as_ref(),
+            &logical,
+            converted,
+            temperature,
+            tools_opt,
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("Protocol provider error: {}", e))?;
 
         Ok(ChatResponse {
             text: Some(response.content),
@@ -255,7 +316,7 @@ impl Provider for ProtocolBackedProvider {
         &self,
         system_prompt: Option<&str>,
         message: &str,
-        _model: &str,
+        model: &str,
         temperature: f64,
         _options: StreamOptions,
     ) -> stream::BoxStream<'static, StreamResult<StreamChunk>> {
@@ -266,11 +327,13 @@ impl Provider for ProtocolBackedProvider {
         messages.push(ai_lib_rust::Message::user(message));
 
         let client = Arc::clone(&self.client);
+        let logical = self.effective_model(model);
 
         async_stream::try_stream! {
             let mut stream = client.chat()
                 .messages(messages)
                 .temperature(temperature)
+                .model(&logical)
                 .stream()
                 .execute_stream()
                 .await
@@ -282,6 +345,14 @@ impl Provider for ProtocolBackedProvider {
                         if !content.is_empty() {
                             yield StreamChunk::delta(content).with_token_estimate();
                         }
+                    }
+                    Ok(ai_lib_rust::StreamingEvent::ThinkingDelta { thinking, .. }) => {
+                        if !thinking.is_empty() {
+                            yield StreamChunk::delta(format!("[thinking] {thinking}")).with_token_estimate();
+                        }
+                    }
+                    Ok(ai_lib_rust::StreamingEvent::PartialToolCall { .. }) => {
+                        // Tool args stream in fragments; surfaced via final non-stream chat if needed.
                     }
                     Ok(ai_lib_rust::StreamingEvent::StreamEnd { .. }) => {
                         yield StreamChunk::final_chunk();
@@ -329,5 +400,26 @@ mod tests {
         ];
         let converted = ProtocolBackedProvider::convert_messages(&messages);
         assert_eq!(converted.len(), 2);
+    }
+
+    #[test]
+    fn test_convert_messages_tool_role_with_call_id() {
+        let messages = vec![ChatMessage::tool_with_call_id("call_1", "result json")];
+        let converted = ProtocolBackedProvider::convert_messages(&messages);
+        assert_eq!(converted.len(), 1);
+        assert_eq!(converted[0].tool_call_id.as_deref(), Some("call_1"));
+    }
+
+    #[test]
+    fn effective_model_id_empty_override_is_provider_slash_model() {
+        assert_eq!(effective_model_id("openai", "gpt-4o", ""), "openai/gpt-4o");
+    }
+
+    #[test]
+    fn effective_model_id_non_empty_override_wins() {
+        assert_eq!(
+            effective_model_id("openai", "gpt-4o", "anthropic/claude-3-5-sonnet"),
+            "anthropic/claude-3-5-sonnet"
+        );
     }
 }
