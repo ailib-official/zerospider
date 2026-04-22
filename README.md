@@ -7,6 +7,8 @@
 
 [English](README.md) · [简体中文](README.zh-CN.md)
 
+[Contributing](CONTRIBUTING.md) · [ai-lib migration (matrix & env)](docs/ai-lib-migration.md)
+
 ---
 
 ## Overview
