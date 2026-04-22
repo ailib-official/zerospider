@@ -20,12 +20,11 @@ fn contributing_mentions_protocol_env_and_checkout() {
 
 #[test]
 fn ai_lib_migration_doc_mentions_protocol_env() {
-    let s = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/docs/ai-lib-migration.md"));
-    for needle in [
-        "AI_PROTOCOL_DIR",
-        "ai-lib-rust",
-        "ai-protocol",
-    ] {
+    let s = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/docs/ai-lib-migration.md"
+    ));
+    for needle in ["AI_PROTOCOL_DIR", "ai-lib-rust", "ai-protocol"] {
         assert!(
             s.contains(needle),
             "docs/ai-lib-migration.md should contain {needle:?}"

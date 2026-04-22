@@ -1100,9 +1100,7 @@ fn sanitize_tool_json_value(
         return None;
     }
 
-    let Some(object) = value.as_object() else {
-        return None;
-    };
+    let object = value.as_object()?;
 
     if let Some(tool_calls) = object.get("tool_calls").and_then(|value| value.as_array()) {
         if !tool_calls.is_empty()
@@ -1142,7 +1140,7 @@ fn strip_isolated_tool_json_artifacts(message: &str, known_tool_names: &HashSet<
     let mut saw_tool_call_payload = false;
 
     while cursor < message.len() {
-        let Some(rel_start) = message[cursor..].find(|ch: char| ch == '{' || ch == '[') else {
+        let Some(rel_start) = message[cursor..].find(|ch: char| ['{', '['].contains(&ch)) else {
             cleaned.push_str(&message[cursor..]);
             break;
         };
@@ -2179,7 +2177,7 @@ fn maybe_restart_managed_daemon_service() -> Result<bool> {
     Ok(false)
 }
 
-pub async fn handle_command(command: crate::ChannelCommands, config: &Config) -> Result<()> {
+pub(crate) async fn handle_command(command: crate::ChannelCommands, config: &Config) -> Result<()> {
     match command {
         crate::ChannelCommands::Start => {
             anyhow::bail!("Start must be handled in main.rs (requires async runtime)")
@@ -4802,7 +4800,14 @@ BTC is currently around $65,000 based on latest tool output."#
 
         assert!(prompt.contains("<available_skills>"), "missing skills XML");
         assert!(prompt.contains("<name>code-review</name>"));
-        assert!(prompt.contains("<location>skills/code-review/SKILL.md</location>"));
+        let loc = std::path::Path::new("skills")
+            .join("code-review")
+            .join("SKILL.md")
+            .to_string_lossy()
+            .replace('\\', "/");
+        assert!(prompt
+            .replace('\\', "/")
+            .contains(&format!("<location>{loc}</location>")));
         assert!(prompt.contains("loaded on demand"));
         assert!(!prompt.contains("<instructions>"));
         assert!(!prompt

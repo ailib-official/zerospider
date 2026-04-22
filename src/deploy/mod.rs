@@ -3,11 +3,6 @@
 pub mod cli;
 pub mod remote;
 
-pub use remote::{
-    DeploymentConfig, DeploymentMode, DeploymentStatus, DeploymentStep, DeploymentTarget,
-    RemoteDeployer,
-};
-
 /// DeployCommands for deploy subcommands.
 #[derive(clap::Parser, Debug)]
 pub enum DeployCommands {

@@ -33,8 +33,6 @@ pub mod traits;
 
 #[cfg(feature = "ai-protocol")]
 pub mod protocol_adapter;
-#[cfg(feature = "ai-protocol")]
-pub use protocol_adapter::resolve_ai_client;
 
 #[allow(unused_imports)]
 pub use traits::{

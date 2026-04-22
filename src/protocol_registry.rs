@@ -42,10 +42,7 @@ fn collect_provider_files(root: &Path) -> Vec<PathBuf> {
             for ent in rd.flatten() {
                 let path = ent.path();
                 let ext = path.extension().and_then(|s| s.to_str());
-                let ok = matches!(
-                    ext,
-                    Some("json") | Some("yaml") | Some("yml") if path.is_file()
-                );
+                let ok = path.is_file() && matches!(ext, Some("json" | "yaml" | "yml"));
                 if ok {
                     out.push(path);
                 }
@@ -169,7 +166,7 @@ pub fn scan_protocol_root(root: &Path) -> anyhow::Result<ProtocolRegistrySnapsho
             let path = ent.path();
             let ext = path.extension().and_then(|s| s.to_str());
             let prefer_json = ext == Some("json");
-            let prefer_yaml = matches!(ext, Some("yaml") | Some("yml"));
+            let prefer_yaml = matches!(ext, Some("yaml" | "yml"));
             if !(prefer_json || prefer_yaml) {
                 continue;
             }

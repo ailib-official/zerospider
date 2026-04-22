@@ -6,7 +6,8 @@
 //! - Request body size limits (64KB max)
 //! - Request timeouts (30s) to prevent slow-loris attacks
 //! - Header sanitization (handled by axum/hyper)
-//! 网关模块负责统一入口与模型调用编排。
+//!
+//! This module coordinates HTTP entry points and model dispatch for the gateway.
 
 use crate::channels::{Channel, LinqChannel, NextcloudTalkChannel, SendMessage, WhatsAppChannel};
 use crate::config::Config;

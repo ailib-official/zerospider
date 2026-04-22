@@ -236,10 +236,10 @@ async fn build_context(mem: &dyn Memory, user_msg: &str, min_relevance_score: f6
                 }
                 let _ = writeln!(context, "- {}: {}", entry.key, entry.content);
             }
-            if context != "[Memory context]\n" {
-                context.push('\n');
-            } else {
+            if context == "[Memory context]\n" {
                 context.clear();
+            } else {
+                context.push('\n');
             }
         }
     }
@@ -382,11 +382,64 @@ fn is_xml_meta_tag(tag: &str) -> bool {
     )
 }
 
-static XML_TOOL_TAG_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?s)<([a-zA-Z_][a-zA-Z0-9_-]*)>\s*(.*?)\s*</\1>").unwrap());
+static XML_ARG_TAG_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?s)<([a-zA-Z_][a-zA-Z0-9_-]*)>\s*([^<]+?)\s*</([a-zA-Z_][a-zA-Z0-9_-]*)>")
+        .unwrap()
+});
 
-static XML_ARG_TAG_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?s)<([a-zA-Z_][a-zA-Z0-9_-]*)>\s*([^<]+?)\s*</\1>").unwrap());
+/// Byte index of the matching `</tag>`, with `<tag>…</tag>` depth for same-named nesting.
+/// The `regex` crate does not support backrefs (`</\1>`), so we cannot match outer tags with `.*?` (it
+/// would stop at the first inner `</child>`).
+fn close_tag_start(s: &str, tag: &str, content_start: usize) -> Option<usize> {
+    let close = format!("</{tag}>");
+    let open = format!("<{tag}>");
+    let mut i = content_start;
+    let mut depth: u32 = 1;
+    while i < s.len() {
+        if s[i..].starts_with(&close) {
+            depth = depth.saturating_sub(1);
+            if depth == 0 {
+                return Some(i);
+            }
+            i += close.len();
+            continue;
+        }
+        if s[i..].starts_with(&open) {
+            depth = depth.saturating_add(1);
+            i += open.len();
+            continue;
+        }
+        i += s[i..].chars().next().map(|c| c.len_utf8()).unwrap_or(1);
+    }
+    None
+}
+
+/// Next `<name>inner</name>` in `s` (outer tag only), returning `(name, inner, after_close)`.
+fn take_first_xml_block(s: &str) -> Option<(&str, &str, &str)> {
+    let s = s.trim_start();
+    if !s.starts_with('<') {
+        return None;
+    }
+    if s[1..].trim_start().starts_with('/') {
+        return None;
+    }
+    let t = s.strip_prefix('<')?;
+    let name_end = t.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '-')?;
+    if name_end == 0 {
+        return None;
+    }
+    let name = t.get(..name_end)?;
+    let after_name = t.get(name_end..)?;
+    let gt = after_name.find('>')?;
+    let content_start = 1 + name_end + gt + 1;
+    let open_close = close_tag_start(s, name, content_start)?;
+    let close = format!("</{name}>");
+    let end_el = open_close + close.len();
+    if end_el > s.len() {
+        return None;
+    }
+    Some((name, s.get(content_start..open_close)?, s.get(end_el..)?))
+}
 
 /// Parse XML-style tool calls in `<tool_call>` bodies.
 /// Supports both nested argument tags and JSON argument payloads:
@@ -394,19 +447,22 @@ static XML_ARG_TAG_RE: LazyLock<Regex> =
 /// - `<shell>{"command":"pwd"}</shell>`
 fn parse_xml_tool_calls(xml_content: &str) -> Option<Vec<ParsedToolCall>> {
     let mut calls = Vec::new();
-    let trimmed = xml_content.trim();
+    let mut rest = xml_content.trim();
 
-    if !trimmed.starts_with('<') || !trimmed.contains('>') {
+    if !rest.starts_with('<') || !rest.contains('>') {
         return None;
     }
 
-    for cap in XML_TOOL_TAG_RE.captures_iter(trimmed) {
-        let tool_name = cap[1].trim().to_string();
-        if is_xml_meta_tag(&tool_name) {
+    while !rest.is_empty() {
+        let Some((name, inner, after)) = take_first_xml_block(rest) else {
+            break;
+        };
+        rest = after;
+        if is_xml_meta_tag(name) {
             continue;
         }
-
-        let inner_content = cap[2].trim();
+        let tool_name = name.to_string();
+        let inner_content = inner.trim();
         if inner_content.is_empty() {
             continue;
         }
@@ -424,7 +480,12 @@ fn parse_xml_tool_calls(xml_content: &str) -> Option<Vec<ParsedToolCall>> {
             }
         } else {
             for inner_cap in XML_ARG_TAG_RE.captures_iter(inner_content) {
-                let key = inner_cap[1].trim().to_string();
+                let a_open = inner_cap[1].trim();
+                let a_close = inner_cap[3].trim();
+                if a_open != a_close {
+                    continue;
+                }
+                let key = a_open.to_string();
                 if is_xml_meta_tag(&key) {
                     continue;
                 }

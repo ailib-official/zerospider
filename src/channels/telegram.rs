@@ -778,8 +778,7 @@ Allowlist Telegram username (without '@') or numeric user ID.",
         // Require at least text, caption, or photo
         let text = match (text_opt, caption_opt, &photo_file_id) {
             (Some(t), _, _) => t.to_string(),
-            (None, Some(c), Some(_)) => c.to_string(),
-            (None, Some(c), None) => c.to_string(),
+            (None, Some(c), Some(_) | None) => c.to_string(),
             (None, None, Some(_)) => String::new(), // will be filled with image marker later
             (None, None, None) => return None,
         };
@@ -3100,7 +3099,11 @@ mod tests {
 
     #[test]
     fn telegram_split_many_short_lines() {
-        let msg: String = (0..1000).map(|i| format!("line {i}\n")).collect();
+        let msg: String = (0..1000).fold(String::new(), |mut acc, i| {
+            use std::fmt::Write as _;
+            let _ = writeln!(acc, "line {i}");
+            acc
+        });
         let parts = split_message_for_telegram(&msg);
         for part in &parts {
             assert!(

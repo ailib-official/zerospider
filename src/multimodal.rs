@@ -279,8 +279,18 @@ async fn normalize_remote_image(
         .into());
     }
 
-    if let Some(content_length) = response.content_length() {
-        let content_length = content_length as usize;
+    if let Some(cl) = response.content_length() {
+        if cl > usize::MAX as u64 {
+            return Err(MultimodalError::ImageTooLarge {
+                input: source.to_string(),
+                size_bytes: usize::MAX,
+                max_bytes,
+            }
+            .into());
+        }
+        // cl <= usize::MAX: rejected above.
+        #[allow(clippy::cast_possible_truncation)]
+        let content_length = cl as usize;
         validate_size(source, content_length, max_bytes)?;
     }
 
@@ -329,7 +339,18 @@ async fn normalize_local_image(source: &str, max_bytes: usize) -> anyhow::Result
                 reason: error.to_string(),
             })?;
 
-    validate_size(source, metadata.len() as usize, max_bytes)?;
+    let len = metadata.len();
+    if len > usize::MAX as u64 {
+        return Err(MultimodalError::ImageTooLarge {
+            input: source.to_string(),
+            size_bytes: usize::MAX,
+            max_bytes,
+        }
+        .into());
+    }
+    #[allow(clippy::cast_possible_truncation)]
+    let len_usize = len as usize;
+    validate_size(source, len_usize, max_bytes)?;
 
     let bytes = tokio::fs::read(path)
         .await
@@ -365,10 +386,7 @@ fn validate_size(source: &str, size_bytes: usize, max_bytes: usize) -> anyhow::R
 }
 
 fn validate_mime(source: &str, mime: &str) -> anyhow::Result<()> {
-    if ALLOWED_IMAGE_MIME_TYPES
-        .iter()
-        .any(|allowed| *allowed == mime)
-    {
+    if ALLOWED_IMAGE_MIME_TYPES.contains(&mime) {
         return Ok(());
     }
 

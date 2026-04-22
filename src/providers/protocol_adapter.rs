@@ -83,7 +83,6 @@ impl ProtocolBackedProvider {
             .iter()
             .map(|m| match m.role.as_str() {
                 "system" => ai_lib_rust::Message::system(&m.content),
-                "user" => ai_lib_rust::Message::user(&m.content),
                 "assistant" => ai_lib_rust::Message::assistant(&m.content),
                 "tool" => {
                     if let Some(ref id) = m.tool_call_id {
@@ -350,9 +349,6 @@ impl Provider for ProtocolBackedProvider {
                         if !thinking.is_empty() {
                             yield StreamChunk::delta(format!("[thinking] {thinking}")).with_token_estimate();
                         }
-                    }
-                    Ok(ai_lib_rust::StreamingEvent::PartialToolCall { .. }) => {
-                        // Tool args stream in fragments; surfaced via final non-stream chat if needed.
                     }
                     Ok(ai_lib_rust::StreamingEvent::StreamEnd { .. }) => {
                         yield StreamChunk::final_chunk();

@@ -811,11 +811,11 @@ async fn main() -> Result<()> {
             bail!("--channels-only does not accept --force");
         }
         let config = if channels_only {
-            onboard::run_channels_repair_wizard().await
+            onboard::wizard::run_channels_repair_wizard().await
         } else if interactive {
-            onboard::run_wizard(force).await
+            onboard::wizard::run_wizard(force).await
         } else {
-            onboard::run_quick_setup(
+            onboard::wizard::run_quick_setup(
                 api_key.as_deref(),
                 provider.as_deref(),
                 model.as_deref(),
@@ -836,8 +836,7 @@ async fn main() -> Result<()> {
     config.apply_env_overrides();
 
     match cli.command {
-        Commands::Onboard { .. } => unreachable!(),
-        Commands::Completions { .. } => unreachable!(),
+        Commands::Onboard { .. } | Commands::Completions { .. } => unreachable!(),
 
         Commands::Agent {
             message,
@@ -982,7 +981,7 @@ async fn main() -> Result<()> {
                     println!("{}", serde_json::to_string_pretty(&snap)?);
                 } else {
                     println!("Protocol root: {}\n", snap.protocol_root.display());
-                    println!("{:<24} {:<6} {}", "PROVIDER_ID", "OK", "REQUIRED_ENVS");
+                    println!("{:<24} {:<6} REQUIRED_ENVS", "PROVIDER_ID", "OK");
                     for p in &snap.providers {
                         println!(
                             "{:<24} {:<6} [{}]",
@@ -1013,7 +1012,7 @@ async fn main() -> Result<()> {
                     println!("{}", serde_json::to_string_pretty(&snap.models)?);
                 } else {
                     println!("Models under {}:\n", root.display());
-                    println!("{:<40} {}", "LOGICAL_ID", "PROVIDER");
+                    println!("{:<40} PROVIDER", "LOGICAL_ID");
                     for m in &snap.models {
                         println!("{:<40} {}", m.logical_id, m.provider);
                     }

@@ -367,7 +367,7 @@ fn parse_skills_prompt_injection_mode(raw: &str) -> Option<SkillsPromptInjection
 }
 
 /// Skills loading configuration (`[skills]` section).
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 pub struct SkillsConfig {
     /// Enable loading and syncing the community open-skills repository.
     /// Default: `false` (opt-in).
@@ -381,16 +381,6 @@ pub struct SkillsConfig {
     /// `full` preserves legacy behavior. `compact` keeps context small and loads skills on demand.
     #[serde(default)]
     pub prompt_injection_mode: SkillsPromptInjectionMode,
-}
-
-impl Default for SkillsConfig {
-    fn default() -> Self {
-        Self {
-            open_skills_enabled: false,
-            open_skills_dir: None,
-            prompt_injection_mode: SkillsPromptInjectionMode::default(),
-        }
-    }
 }
 
 /// Multimodal (image) handling configuration (`[multimodal]` section).
@@ -2228,7 +2218,7 @@ pub struct CustomTunnelConfig {
 // ── Deploy ───────────────────────────────────────────────────────
 
 /// Remote deployment configuration for ZeroSpider to other servers.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 pub struct DeployConfig {
     /// List of deployment targets (servers).
     #[serde(default)]
@@ -2314,15 +2304,6 @@ fn default_deploy_working_dir() -> String {
 
 fn default_health_check_interval() -> u64 {
     30
-}
-
-impl Default for DeployConfig {
-    fn default() -> Self {
-        Self {
-            servers: Vec::new(),
-            settings: DeploymentSettingsConfig::default(),
-        }
-    }
 }
 
 impl Default for DeploymentSettingsConfig {
@@ -3861,6 +3842,7 @@ impl Config {
     }
 }
 
+#[cfg_attr(not(unix), allow(clippy::unused_async))]
 async fn sync_directory(path: &Path) -> Result<()> {
     #[cfg(unix)]
     {
@@ -5567,6 +5549,7 @@ default_temperature = 0.7
     }
 
     #[test]
+    #[cfg(unix)]
     async fn load_or_init_workspace_override_uses_workspace_root_for_config() {
         let _env_guard = env_override_lock().await;
         let temp_home =
@@ -5593,6 +5576,7 @@ default_temperature = 0.7
     }
 
     #[test]
+    #[cfg(unix)]
     async fn load_or_init_workspace_suffix_uses_legacy_config_layout() {
         let _env_guard = env_override_lock().await;
         let temp_home =
@@ -5620,6 +5604,7 @@ default_temperature = 0.7
     }
 
     #[test]
+    #[cfg(unix)]
     async fn load_or_init_workspace_override_keeps_existing_legacy_config() {
         let _env_guard = env_override_lock().await;
         let temp_home =
@@ -5658,6 +5643,7 @@ default_model = "legacy-model"
     }
 
     #[test]
+    #[cfg(unix)]
     async fn load_or_init_uses_persisted_active_workspace_marker() {
         let _env_guard = env_override_lock().await;
         let temp_home =
@@ -5695,6 +5681,7 @@ default_model = "legacy-model"
     }
 
     #[test]
+    #[cfg(unix)]
     async fn load_or_init_env_workspace_override_takes_priority_over_marker() {
         let _env_guard = env_override_lock().await;
         let temp_home =
@@ -5732,6 +5719,7 @@ default_model = "legacy-model"
     }
 
     #[test]
+    #[cfg(unix)]
     async fn persist_active_workspace_marker_is_cleared_for_default_config_dir() {
         let _env_guard = env_override_lock().await;
         let temp_home =
