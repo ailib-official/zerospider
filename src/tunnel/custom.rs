@@ -161,6 +161,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(unix)]
     async fn start_without_pattern_returns_local_url() {
         let tunnel = CustomTunnel::new("sleep 1".into(), None, None);
 
@@ -175,6 +176,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(unix)]
     async fn start_with_pattern_extracts_url() {
         let tunnel = CustomTunnel::new(
             "echo https://public.example".into(),
@@ -194,6 +196,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(unix)]
     async fn start_replaces_host_and_port_placeholders() {
         let tunnel = CustomTunnel::new(
             "echo http://{host}:{port}".into(),
@@ -208,6 +211,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(unix)]
     async fn health_check_with_unreachable_health_url_returns_false() {
         let tunnel = CustomTunnel::new(
             "sleep 1".into(),

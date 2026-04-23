@@ -1532,8 +1532,13 @@ mod tests {
     #[test]
     fn checklist_root_path_blocked() {
         let p = default_policy();
-        assert!(!p.is_path_allowed("/"));
-        assert!(!p.is_path_allowed("/anything"));
+        if cfg!(windows) {
+            assert!(!p.is_path_allowed(r"C:\"));
+            assert!(!p.is_path_allowed(r"C:\anything"));
+        } else {
+            assert!(!p.is_path_allowed("/"));
+            assert!(!p.is_path_allowed("/anything"));
+        }
     }
 
     #[test]
@@ -1590,7 +1595,12 @@ mod tests {
             workspace_only: true,
             ..SecurityPolicy::default()
         };
-        assert!(!p.is_path_allowed("/any/absolute/path"));
+        let abs = if cfg!(windows) {
+            r"C:\any\absolute\path"
+        } else {
+            "/any/absolute/path"
+        };
+        assert!(!p.is_path_allowed(abs));
         assert!(p.is_path_allowed("relative/path.txt"));
     }
 

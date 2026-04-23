@@ -206,6 +206,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(unix)]
     async fn shell_executes_allowed_command() {
         let tool = ShellTool::new(test_security(AutonomyLevel::Supervised), test_runtime());
         let result = tool
@@ -218,6 +219,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(unix)]
     async fn shell_blocks_disallowed_command() {
         let tool = ShellTool::new(test_security(AutonomyLevel::Supervised), test_runtime());
         let result = tool
@@ -230,6 +232,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(unix)]
     async fn shell_blocks_readonly() {
         let tool = ShellTool::new(test_security(AutonomyLevel::ReadOnly), test_runtime());
         let result = tool
@@ -260,6 +263,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(unix)]
     async fn shell_captures_exit_code() {
         let tool = ShellTool::new(test_security(AutonomyLevel::Supervised), test_runtime());
         let result = tool
@@ -303,6 +307,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
+    #[cfg(unix)]
     async fn shell_does_not_leak_api_key() {
         let _g1 = EnvGuard::set("API_KEY", "sk-test-secret-12345");
         let _g2 = EnvGuard::set("ZEROCLAW_API_KEY", "sk-test-secret-67890");
@@ -324,6 +329,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(unix)]
     async fn shell_preserves_path_and_home() {
         let tool = ShellTool::new(test_security_with_env_cmd(), test_runtime());
 
@@ -349,6 +355,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(unix)]
     async fn shell_requires_approval_for_medium_risk_command() {
         let security = Arc::new(SecurityPolicy {
             autonomy: AutonomyLevel::Supervised,
@@ -427,6 +434,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(unix)]
     async fn shell_blocks_rate_limited() {
         let security = Arc::new(SecurityPolicy {
             autonomy: AutonomyLevel::Supervised,

@@ -128,6 +128,7 @@ mod tests {
     use crate::config::schema::{
         CloudflareTunnelConfig, CustomTunnelConfig, NgrokTunnelConfig, TunnelConfig,
     };
+    #[cfg(unix)]
     use tokio::process::Command;
 
     /// Helper: assert `create_tunnel` returns an error containing `needle`.
@@ -325,6 +326,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(unix)]
     async fn kill_shared_terminates_and_clears_child() {
         let proc = new_shared_process();
 

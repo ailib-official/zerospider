@@ -176,6 +176,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(unix)]
     async fn force_runs_job_and_records_history() {
         let tmp = TempDir::new().unwrap();
         let cfg = test_config(&tmp).await;
@@ -223,6 +224,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(unix)]
     async fn shell_run_requires_approval_for_medium_risk() {
         let tmp = TempDir::new().unwrap();
         let mut config = Config {
