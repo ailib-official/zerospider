@@ -30,36 +30,41 @@ impl PrometheusObserver {
         let registry = Registry::new();
 
         let agent_starts = IntCounterVec::new(
-            prometheus::Opts::new("zeroclaw_agent_starts_total", "Total agent invocations"),
+            prometheus::Opts::new("zerospider_agent_starts_total", "Total agent invocations"),
             &["provider", "model"],
         )
         .expect("valid metric");
 
         let tool_calls = IntCounterVec::new(
-            prometheus::Opts::new("zeroclaw_tool_calls_total", "Total tool calls"),
+            prometheus::Opts::new("zerospider_tool_calls_total", "Total tool calls"),
             &["tool", "success"],
         )
         .expect("valid metric");
 
         let channel_messages = IntCounterVec::new(
-            prometheus::Opts::new("zeroclaw_channel_messages_total", "Total channel messages"),
+            prometheus::Opts::new(
+                "zerospider_channel_messages_total",
+                "Total channel messages",
+            ),
             &["channel", "direction"],
         )
         .expect("valid metric");
 
-        let heartbeat_ticks =
-            prometheus::IntCounter::new("zeroclaw_heartbeat_ticks_total", "Total heartbeat ticks")
-                .expect("valid metric");
+        let heartbeat_ticks = prometheus::IntCounter::new(
+            "zerospider_heartbeat_ticks_total",
+            "Total heartbeat ticks",
+        )
+        .expect("valid metric");
 
         let errors = IntCounterVec::new(
-            prometheus::Opts::new("zeroclaw_errors_total", "Total errors by component"),
+            prometheus::Opts::new("zerospider_errors_total", "Total errors by component"),
             &["component"],
         )
         .expect("valid metric");
 
         let agent_duration = HistogramVec::new(
             HistogramOpts::new(
-                "zeroclaw_agent_duration_seconds",
+                "zerospider_agent_duration_seconds",
                 "Agent invocation duration in seconds",
             )
             .buckets(vec![0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0]),
@@ -69,7 +74,7 @@ impl PrometheusObserver {
 
         let tool_duration = HistogramVec::new(
             HistogramOpts::new(
-                "zeroclaw_tool_duration_seconds",
+                "zerospider_tool_duration_seconds",
                 "Tool execution duration in seconds",
             )
             .buckets(vec![0.01, 0.05, 0.1, 0.5, 1.0, 5.0, 10.0]),
@@ -79,7 +84,7 @@ impl PrometheusObserver {
 
         let request_latency = Histogram::with_opts(
             HistogramOpts::new(
-                "zeroclaw_request_latency_seconds",
+                "zerospider_request_latency_seconds",
                 "Request latency in seconds",
             )
             .buckets(vec![0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0]),
@@ -87,19 +92,19 @@ impl PrometheusObserver {
         .expect("valid metric");
 
         let tokens_used = prometheus::IntGauge::new(
-            "zeroclaw_tokens_used_last",
+            "zerospider_tokens_used_last",
             "Tokens used in the last request",
         )
         .expect("valid metric");
 
         let active_sessions = GaugeVec::new(
-            prometheus::Opts::new("zeroclaw_active_sessions", "Number of active sessions"),
+            prometheus::Opts::new("zerospider_active_sessions", "Number of active sessions"),
             &[],
         )
         .expect("valid metric");
 
         let queue_depth = GaugeVec::new(
-            prometheus::Opts::new("zeroclaw_queue_depth", "Message queue depth"),
+            prometheus::Opts::new("zerospider_queue_depth", "Message queue depth"),
             &[],
         )
         .expect("valid metric");
@@ -308,10 +313,10 @@ mod tests {
         obs.record_metric(&ObserverMetric::RequestLatency(Duration::from_millis(250)));
 
         let output = obs.encode();
-        assert!(output.contains("zeroclaw_agent_starts_total"));
-        assert!(output.contains("zeroclaw_tool_calls_total"));
-        assert!(output.contains("zeroclaw_heartbeat_ticks_total"));
-        assert!(output.contains("zeroclaw_request_latency_seconds"));
+        assert!(output.contains("zerospider_agent_starts_total"));
+        assert!(output.contains("zerospider_tool_calls_total"));
+        assert!(output.contains("zerospider_heartbeat_ticks_total"));
+        assert!(output.contains("zerospider_request_latency_seconds"));
     }
 
     #[test]
@@ -323,7 +328,7 @@ mod tests {
         }
 
         let output = obs.encode();
-        assert!(output.contains("zeroclaw_heartbeat_ticks_total 3"));
+        assert!(output.contains("zerospider_heartbeat_ticks_total 3"));
     }
 
     #[test]
@@ -347,8 +352,8 @@ mod tests {
         });
 
         let output = obs.encode();
-        assert!(output.contains(r#"zeroclaw_tool_calls_total{success="true",tool="shell"} 2"#));
-        assert!(output.contains(r#"zeroclaw_tool_calls_total{success="false",tool="shell"} 1"#));
+        assert!(output.contains(r#"zerospider_tool_calls_total{success="true",tool="shell"} 2"#));
+        assert!(output.contains(r#"zerospider_tool_calls_total{success="false",tool="shell"} 1"#));
     }
 
     #[test]
@@ -368,8 +373,8 @@ mod tests {
         });
 
         let output = obs.encode();
-        assert!(output.contains(r#"zeroclaw_errors_total{component="provider"} 2"#));
-        assert!(output.contains(r#"zeroclaw_errors_total{component="channels"} 1"#));
+        assert!(output.contains(r#"zerospider_errors_total{component="provider"} 2"#));
+        assert!(output.contains(r#"zerospider_errors_total{component="channels"} 1"#));
     }
 
     #[test]
@@ -379,6 +384,6 @@ mod tests {
         obs.record_metric(&ObserverMetric::TokensUsed(200));
 
         let output = obs.encode();
-        assert!(output.contains("zeroclaw_tokens_used_last 200"));
+        assert!(output.contains("zerospider_tokens_used_last 200"));
     }
 }

@@ -75,7 +75,7 @@ stars = {stars}
 updated_at = "{updated}"
 
 [skill.requirements]
-runtime = "zeroclaw >= 0.1"
+runtime = "zerospider >= 0.1"
 
 [skill.metadata]
 auto_integrated = true
@@ -193,7 +193,7 @@ mod tests {
 
     #[tokio::test]
     async fn integrate_creates_files() {
-        let tmp = std::env::temp_dir().join("zeroclaw-test-integrate");
+        let tmp = std::env::temp_dir().join("zerospider-test-integrate");
         let _ = fs::remove_dir_all(&tmp);
 
         let integrator = Integrator::new(tmp.to_string_lossy().into_owned());

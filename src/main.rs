@@ -172,10 +172,10 @@ Launches an interactive chat session with the configured AI provider. \
 Use --message for single-shot queries without entering interactive mode.
 
 Examples:
-  zeroclaw agent                              # interactive session
-  zeroclaw agent -m \"Summarize today's logs\"  # single message
-  zeroclaw agent -p anthropic --model claude-sonnet-4-20250514
-  zeroclaw agent --peripheral nucleo-f401re:/dev/ttyACM0")]
+  zerospider agent                              # interactive session
+  zerospider agent -m \"Summarize today's logs\"  # single message
+  zerospider agent -p anthropic --model claude-sonnet-4-20250514
+  zerospider agent --peripheral nucleo-f401re:/dev/ttyACM0")]
     Agent {
         /// Single message mode (don't enter interactive mode)
         #[arg(short, long)]
@@ -207,10 +207,10 @@ and WebSocket connections. Bind address defaults to the values in \
 your config file (gateway.host / gateway.port).
 
 Examples:
-  zeroclaw gateway                  # use config defaults
-  zeroclaw gateway -p 8080          # listen on port 8080
-  zeroclaw gateway --host 0.0.0.0   # bind to all interfaces
-  zeroclaw gateway -p 0             # random available port")]
+  zerospider gateway                  # use config defaults
+  zerospider gateway -p 8080          # listen on port 8080
+  zerospider gateway --host 0.0.0.0   # bind to all interfaces
+  zerospider gateway -p 0             # random available port")]
     Gateway {
         /// Port to listen on (use 0 for random available port); defaults to config gateway.port
         #[arg(short, long)]
@@ -230,13 +230,13 @@ channels (Telegram, Discord, Slack, etc.), heartbeat monitor, and \
 the cron scheduler. This is the recommended way to run ZeroClaw in \
 production or as an always-on assistant.
 
-Use 'zeroclaw service install' to register the daemon as an OS \
+Use 'zerospider service install' to register the daemon as an OS \
 service (systemd/launchd) for auto-start on boot.
 
 Examples:
-  zeroclaw daemon                   # use config defaults
-  zeroclaw daemon -p 9090           # gateway on port 9090
-  zeroclaw daemon --host 127.0.0.1  # localhost only")]
+  zerospider daemon                   # use config defaults
+  zerospider daemon -p 9090           # gateway on port 9090
+  zerospider daemon --host 127.0.0.1  # localhost only")]
     Daemon {
         /// Port to listen on (use 0 for random available port); defaults to config gateway.port
         #[arg(short, long)]
@@ -278,14 +278,14 @@ Cron expressions use the standard 5-field format: \
 override with --tz and an IANA timezone name.
 
 Examples:
-  zeroclaw cron list
-  zeroclaw cron add '0 9 * * 1-5' 'Good morning' --tz America/New_York
-  zeroclaw cron add '*/30 * * * *' 'Check system health'
-  zeroclaw cron add-at 2025-01-15T14:00:00Z 'Send reminder'
-  zeroclaw cron add-every 60000 'Ping heartbeat'
-  zeroclaw cron once 30m 'Run backup in 30 minutes'
-  zeroclaw cron pause <task-id>
-  zeroclaw cron update <task-id> --expression '0 8 * * *' --tz Europe/London")]
+  zerospider cron list
+  zerospider cron add '0 9 * * 1-5' 'Good morning' --tz America/New_York
+  zerospider cron add '*/30 * * * *' 'Check system health'
+  zerospider cron add-at 2025-01-15T14:00:00Z 'Send reminder'
+  zerospider cron add-every 60000 'Ping heartbeat'
+  zerospider cron once 30m 'Run backup in 30 minutes'
+  zerospider cron pause <task-id>
+  zerospider cron update <task-id> --expression '0 8 * * *' --tz Europe/London")]
     Cron {
         #[command(subcommand)]
         cron_command: CronCommands,
@@ -309,11 +309,11 @@ to messaging platforms. Supported channel types: telegram, discord, \
 slack, whatsapp, matrix, imessage, email.
 
 Examples:
-  zeroclaw channel list
-  zeroclaw channel doctor
-  zeroclaw channel add telegram '{\"bot_token\":\"...\",\"name\":\"my-bot\"}'
-  zeroclaw channel remove my-bot
-  zeroclaw channel bind-telegram zeroclaw_user")]
+  zerospider channel list
+  zerospider channel doctor
+  zerospider channel add telegram '{\"bot_token\":\"...\",\"name\":\"my-bot\"}'
+  zerospider channel remove my-bot
+  zerospider channel bind-telegram zerospider_user")]
     Channel {
         #[command(subcommand)]
         channel_command: ChannelCommands,
@@ -352,9 +352,9 @@ Enumerate connected USB devices, identify known development boards \
 probe-rs / ST-Link.
 
 Examples:
-  zeroclaw hardware discover
-  zeroclaw hardware introspect /dev/ttyACM0
-  zeroclaw hardware info --chip STM32F401RETx")]
+  zerospider hardware discover
+  zerospider hardware introspect /dev/ttyACM0
+  zerospider hardware info --chip STM32F401RETx")]
     Hardware {
         #[command(subcommand)]
         hardware_command: zerospider::HardwareCommands,
@@ -369,11 +369,11 @@ to the agent (GPIO, sensors, actuators). Supported boards: \
 nucleo-f401re, rpi-gpio, esp32, arduino-uno.
 
 Examples:
-  zeroclaw peripheral list
-  zeroclaw peripheral add nucleo-f401re /dev/ttyACM0
-  zeroclaw peripheral add rpi-gpio native
-  zeroclaw peripheral flash --port /dev/cu.usbmodem12345
-  zeroclaw peripheral flash-nucleo")]
+  zerospider peripheral list
+  zerospider peripheral add nucleo-f401re /dev/ttyACM0
+  zerospider peripheral add rpi-gpio native
+  zerospider peripheral flash --port /dev/cu.usbmodem12345
+  zerospider peripheral flash-nucleo")]
     Peripheral {
         #[command(subcommand)]
         peripheral_command: zerospider::PeripheralCommands,
@@ -388,11 +388,11 @@ Supports filtering by category and session, pagination, and \
 batch clearing with confirmation.
 
 Examples:
-  zeroclaw memory stats
-  zeroclaw memory list
-  zeroclaw memory list --category core --limit 10
-  zeroclaw memory get <key>
-  zeroclaw memory clear --category conversation --yes")]
+  zerospider memory stats
+  zerospider memory list
+  zerospider memory list --category core --limit 10
+  zerospider memory get <key>
+  zerospider memory clear --category conversation --yes")]
     Memory {
         #[command(subcommand)]
         memory_command: MemoryCommands,
@@ -407,8 +407,8 @@ the full JSON Schema for the config file, which documents every \
 available key, type, and default value.
 
 Examples:
-  zeroclaw config schema              # print JSON Schema to stdout
-  zeroclaw config schema > schema.json")]
+  zerospider config schema              # print JSON Schema to stdout
+  zerospider config schema > schema.json")]
     Config {
         #[command(subcommand)]
         config_command: ConfigCommands,
@@ -420,11 +420,11 @@ Deploy ZeroClaw to remote servers via SSH.
 Manage remote deployments with support for direct binary deployment, Docker containers, and systemd services. Includes health checks, status monitoring, rollback, and configuration sync capabilities.
 
 Examples:
-  zeroclaw deploy deploy --server prod-001
-  zeroclaw deploy status --server prod-001
-  zeroclaw deploy health-check --server prod-001
-  zeroclaw deploy list
-  zeroclaw deploy rollback --server prod-001")]
+  zerospider deploy deploy --server prod-001
+  zerospider deploy status --server prod-001
+  zerospider deploy health-check --server prod-001
+  zerospider deploy list
+  zerospider deploy rollback --server prod-001")]
     Deploy {
         #[command(subcommand)]
         deploy_command: deploy::DeployCommands,
@@ -432,14 +432,14 @@ Examples:
 
     /// Generate shell completion script to stdout
     #[command(long_about = "\
-Generate shell completion scripts for `zeroclaw`.
+Generate shell completion scripts for `zerospider`.
 
 The script is printed to stdout so it can be sourced directly:
 
 Examples:
-  source <(zeroclaw completions bash)
-  zeroclaw completions zsh > ~/.zfunc/_zeroclaw
-  zeroclaw completions fish > ~/.config/fish/completions/zeroclaw.fish")]
+  source <(zerospider completions bash)
+  zerospider completions zsh > ~/.zfunc/_zerospider
+  zerospider completions fish > ~/.config/fish/completions/zerospider.fish")]
     Completions {
         /// Target shell
         #[arg(value_enum)]
@@ -1372,7 +1372,7 @@ async fn handle_auth_command(auth_command: AuthCommands, config: &Config) -> Res
                 Err(e) => {
                     println!("Callback capture failed: {e}");
                     println!(
-                            "Run `zeroclaw auth paste-redirect --provider openai-codex --profile {profile}`"
+                            "Run `zerospider auth paste-redirect --provider openai-codex --profile {profile}`"
                         );
                     return Ok(());
                 }
@@ -1404,7 +1404,7 @@ async fn handle_auth_command(auth_command: AuthCommands, config: &Config) -> Res
 
             let pending = load_pending_openai_login(config)?.ok_or_else(|| {
                 anyhow::anyhow!(
-                    "No pending OpenAI login found. Run `zeroclaw auth login --provider openai-codex` first."
+                    "No pending OpenAI login found. Run `zerospider auth login --provider openai-codex` first."
                 )
             })?;
 
@@ -1515,7 +1515,7 @@ async fn handle_auth_command(auth_command: AuthCommands, config: &Config) -> Res
                 }
                 None => {
                     bail!(
-                        "No OpenAI Codex auth profile found. Run `zeroclaw auth login --provider openai-codex`."
+                        "No OpenAI Codex auth profile found. Run `zerospider auth login --provider openai-codex`."
                     )
                 }
             }
@@ -1623,7 +1623,7 @@ mod tests {
     #[test]
     fn onboard_cli_accepts_model_provider_and_api_key_in_quick_mode() {
         let cli = Cli::try_parse_from([
-            "zeroclaw",
+            "zerospider",
             "onboard",
             "--provider",
             "openrouter",
@@ -1658,7 +1658,7 @@ mod tests {
     #[test]
     fn completions_cli_parses_supported_shells() {
         for shell in ["bash", "fish", "zsh", "powershell", "elvish"] {
-            let cli = Cli::try_parse_from(["zeroclaw", "completions", shell])
+            let cli = Cli::try_parse_from(["zerospider", "completions", shell])
                 .expect("completions invocation should parse");
             match cli.command {
                 Commands::Completions { .. } => {}
@@ -1674,14 +1674,14 @@ mod tests {
             .expect("completion generation should succeed");
         let script = String::from_utf8(output).expect("completion output should be valid utf-8");
         assert!(
-            script.contains("zeroclaw"),
+            script.contains("zerospider"),
             "completion script should reference binary name"
         );
     }
 
     #[test]
     fn onboard_cli_accepts_force_flag() {
-        let cli = Cli::try_parse_from(["zeroclaw", "onboard", "--force"])
+        let cli = Cli::try_parse_from(["zerospider", "onboard", "--force"])
             .expect("onboard --force should parse");
 
         match cli.command {

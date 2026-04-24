@@ -29,7 +29,7 @@ pub fn floor_char_boundary(s: &str, byte_idx: usize) -> usize {
 ///
 /// # Examples
 /// ```ignore
-/// use zeroclaw::util::truncate_with_ellipsis;
+/// use zerospider::util::truncate_with_ellipsis;
 ///
 /// // ASCII string - no truncation needed
 /// assert_eq!(truncate_with_ellipsis("hello", 10), "hello");

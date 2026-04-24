@@ -92,7 +92,7 @@ const CUSTOM_MODEL_SENTINEL: &str = "__custom_model__";
 fn has_launchable_channels(channels: &ChannelsConfig) -> bool {
     let ChannelsConfig {
         cli: _,     // `cli` is always available and does not require channel server startup
-        webhook: _, // webhook traffic is handled by gateway, not `zeroclaw channel start`
+        webhook: _, // webhook traffic is handled by gateway, not `zerospider channel start`
         telegram,
         discord,
         slack,
@@ -318,8 +318,8 @@ pub async fn run_channels_repair_wizard() -> Result<Config> {
 // ── Quick setup (zero prompts) ───────────────────────────────────
 
 /// Non-interactive setup: generates a sensible default config instantly.
-/// Use `zeroclaw onboard` or `zeroclaw onboard --api-key sk-... --provider openrouter --memory sqlite|lucid`.
-/// Use `zeroclaw onboard --interactive` for the full wizard.
+/// Use `zerospider onboard` or `zerospider onboard --api-key sk-... --provider openrouter --memory sqlite|lucid`.
+/// Use `zerospider onboard --interactive` for the full wizard.
 fn backend_key_from_choice(choice: usize) -> &'static str {
     selectable_memory_backends()
         .get(choice)
@@ -399,9 +399,9 @@ async fn run_quick_setup_with_home(
     );
     println!();
 
-    let zeroclaw_dir = home.join(".zeroclaw");
-    let workspace_dir = zeroclaw_dir.join("workspace");
-    let config_path = zeroclaw_dir.join("config.toml");
+    let zerospider_dir = home.join(".zerospider");
+    let workspace_dir = zerospider_dir.join("workspace");
+    let config_path = zerospider_dir.join("config.toml");
 
     ensure_onboard_overwrite_allowed(&config_path, force)?;
     fs::create_dir_all(&workspace_dir).context("Failed to create workspace directory")?;
@@ -546,13 +546,13 @@ async fn run_quick_setup_with_home(
     println!("  {}", style("Next steps:").white().bold());
     if credential_override.is_none() {
         println!("    1. Set your API key:  export OPENROUTER_API_KEY=\"sk-...\"");
-        println!("    2. Or edit:           ~/.zeroclaw/config.toml");
-        println!("    3. Chat:              zeroclaw agent -m \"Hello!\"");
-        println!("    4. Gateway:           zeroclaw gateway");
+        println!("    2. Or edit:           ~/.zerospider/config.toml");
+        println!("    3. Chat:              zerospider agent -m \"Hello!\"");
+        println!("    4. Gateway:           zerospider gateway");
     } else {
-        println!("    1. Chat:     zeroclaw agent -m \"Hello!\"");
-        println!("    2. Gateway:  zeroclaw gateway");
-        println!("    3. Status:   zeroclaw status");
+        println!("    1. Chat:     zerospider agent -m \"Hello!\"");
+        println!("    2. Gateway:  zerospider gateway");
+        println!("    3. Status:   zerospider status");
     }
     println!();
 
@@ -1584,7 +1584,7 @@ pub fn run_models_refresh(
             print_model_preview(&cached.models);
             println!();
             println!(
-                "Tip: run `zeroclaw models refresh --force --provider {}` to fetch latest now.",
+                "Tip: run `zerospider models refresh --force --provider {}` to fetch latest now.",
                 provider_name
             );
             return Ok(());
@@ -1709,7 +1709,7 @@ fn setup_workspace() -> Result<(PathBuf, PathBuf)> {
     let home = directories::UserDirs::new()
         .map(|u| u.home_dir().to_path_buf())
         .context("Could not find home directory")?;
-    let default_dir = home.join(".zeroclaw");
+    let default_dir = home.join(".zerospider");
 
     print_bullet(&format!(
         "Default location: {}",
@@ -1721,7 +1721,7 @@ fn setup_workspace() -> Result<(PathBuf, PathBuf)> {
         .default(true)
         .interact()?;
 
-    let zeroclaw_dir = if use_default {
+    let zerospider_dir = if use_default {
         default_dir
     } else {
         let custom: String = Input::new()
@@ -1731,8 +1731,8 @@ fn setup_workspace() -> Result<(PathBuf, PathBuf)> {
         PathBuf::from(expanded)
     };
 
-    let workspace_dir = zeroclaw_dir.join("workspace");
-    let config_path = zeroclaw_dir.join("config.toml");
+    let workspace_dir = zerospider_dir.join("workspace");
+    let config_path = zerospider_dir.join("config.toml");
 
     fs::create_dir_all(&workspace_dir).context("Failed to create workspace directory")?;
 
@@ -3494,7 +3494,7 @@ fn setup_channels() -> Result<ChannelsConfig> {
 
                     let session_path: String = Input::new()
                         .with_prompt("  Session database path")
-                        .default("~/.zeroclaw/state/whatsapp-web/session.db".into())
+                        .default("~/.zerospider/state/whatsapp-web/session.db".into())
                         .interact_text()?;
 
                     if session_path.trim().is_empty() {
@@ -3584,7 +3584,7 @@ fn setup_channels() -> Result<ChannelsConfig> {
 
                 let verify_token: String = Input::new()
                     .with_prompt("  Webhook verify token (create your own)")
-                    .default("zeroclaw-whatsapp-verify".into())
+                    .default("zerospider-whatsapp-verify".into())
                     .interact_text()?;
 
                 // Test connection (run entirely in separate thread — Response must be used/dropped there)
@@ -4911,7 +4911,7 @@ fn print_summary(config: &Config) {
             );
             println!(
                 "       {}",
-                style("zeroclaw auth login --provider openai-codex --device-code").yellow()
+                style("zerospider auth login --provider openai-codex --device-code").yellow()
             );
         } else if provider == "anthropic" {
             println!(
@@ -4925,7 +4925,7 @@ fn print_summary(config: &Config) {
             println!(
                 "       {}",
                 style(
-                    "or: zeroclaw auth paste-token --provider anthropic --auth-kind authorization"
+                    "or: zerospider auth paste-token --provider anthropic --auth-kind authorization"
                 )
                 .yellow()
             );
@@ -4951,7 +4951,7 @@ fn print_summary(config: &Config) {
             style(format!("{step}.")).cyan().bold(),
             style("Launch your channels").white().bold()
         );
-        println!("       {}", style("zeroclaw channel start").yellow());
+        println!("       {}", style("zerospider channel start").yellow());
         println!();
         step += 1;
     }
@@ -4962,7 +4962,7 @@ fn print_summary(config: &Config) {
     );
     println!(
         "       {}",
-        style("zeroclaw agent -m \"Hello, ZeroClaw!\"").yellow()
+        style("zerospider agent -m \"Hello, ZeroClaw!\"").yellow()
     );
     println!();
     step += 1;
@@ -4971,7 +4971,7 @@ fn print_summary(config: &Config) {
         "    {} Start interactive CLI mode:",
         style(format!("{step}.")).cyan().bold()
     );
-    println!("       {}", style("zeroclaw agent").yellow());
+    println!("       {}", style("zerospider agent").yellow());
     println!();
     step += 1;
 
@@ -4979,7 +4979,7 @@ fn print_summary(config: &Config) {
         "    {} Check full status:",
         style(format!("{step}.")).cyan().bold()
     );
-    println!("       {}", style("zeroclaw status").yellow());
+    println!("       {}", style("zerospider status").yellow());
 
     println!();
     println!(
@@ -5054,10 +5054,10 @@ mod tests {
     #[tokio::test]
     async fn quick_setup_existing_config_requires_force_when_non_interactive() {
         let tmp = TempDir::new().unwrap();
-        let zeroclaw_dir = tmp.path().join(".zeroclaw");
-        let config_path = zeroclaw_dir.join("config.toml");
+        let zerospider_dir = tmp.path().join(".zerospider");
+        let config_path = zerospider_dir.join("config.toml");
 
-        tokio::fs::create_dir_all(&zeroclaw_dir).await.unwrap();
+        tokio::fs::create_dir_all(&zerospider_dir).await.unwrap();
         tokio::fs::write(&config_path, "default_provider = \"openrouter\"\n")
             .await
             .unwrap();
@@ -5081,10 +5081,10 @@ mod tests {
     #[tokio::test]
     async fn quick_setup_existing_config_overwrites_with_force() {
         let tmp = TempDir::new().unwrap();
-        let zeroclaw_dir = tmp.path().join(".zeroclaw");
-        let config_path = zeroclaw_dir.join("config.toml");
+        let zerospider_dir = tmp.path().join(".zerospider");
+        let config_path = zerospider_dir.join("config.toml");
 
-        tokio::fs::create_dir_all(&zeroclaw_dir).await.unwrap();
+        tokio::fs::create_dir_all(&zerospider_dir).await.unwrap();
         tokio::fs::write(
             &config_path,
             "default_provider = \"anthropic\"\ndefault_model = \"stale-model\"\n",

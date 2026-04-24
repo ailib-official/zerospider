@@ -7,11 +7,11 @@ use std::process::Command;
 use std::time::{Duration, SystemTime};
 
 const OPEN_SKILLS_REPO_URL: &str = "https://github.com/besoeasy/open-skills";
-const OPEN_SKILLS_SYNC_MARKER: &str = ".zeroclaw-open-skills-sync";
+const OPEN_SKILLS_SYNC_MARKER: &str = ".zerospider-open-skills-sync";
 const OPEN_SKILLS_SYNC_INTERVAL_SECS: u64 = 60 * 60 * 24 * 7;
 
 /// A skill is a user-defined or community-built capability.
-/// Skills live in `~/.zeroclaw/workspace/skills/<name>/SKILL.md`
+/// Skills live in `~/.zerospider/workspace/skills/<name>/SKILL.md`
 /// and can include tool definitions, prompts, and automation scripts.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Skill {
@@ -575,8 +575,8 @@ pub fn init_skills_dir(workspace_dir: &Path) -> Result<()> {
              The agent will read it and follow the instructions.\n\n\
              ## Installing community skills\n\n\
              ```bash\n\
-             zeroclaw skills install <source>\n\
-             zeroclaw skills list\n\
+             zerospider skills install <source>\n\
+             zerospider skills list\n\
              ```\n",
         )?;
     }
@@ -655,10 +655,10 @@ pub fn handle_command(command: crate::SkillCommands, config: &crate::config::Con
             if skills.is_empty() {
                 println!("No skills installed.");
                 println!();
-                println!("  Create one: mkdir -p ~/.zeroclaw/workspace/skills/my-skill");
-                println!("              echo '# My Skill' > ~/.zeroclaw/workspace/skills/my-skill/SKILL.md");
+                println!("  Create one: mkdir -p ~/.zerospider/workspace/skills/my-skill");
+                println!("              echo '# My Skill' > ~/.zerospider/workspace/skills/my-skill/SKILL.md");
                 println!();
-                println!("  Or install: zeroclaw skills install <source>");
+                println!("  Or install: zerospider skills install <source>");
             } else {
                 println!("Installed skills ({}):", skills.len());
                 println!();
@@ -706,7 +706,7 @@ pub fn handle_command(command: crate::SkillCommands, config: &crate::config::Con
                         "  {} Skill installed successfully!",
                         console::style("✓").green().bold()
                     );
-                    println!("  Restart `zeroclaw channel start` to activate.");
+                    println!("  Restart `zerospider channel start` to activate.");
                 } else {
                     let stderr = String::from_utf8_lossy(&output.stderr);
                     anyhow::bail!("Git clone failed: {stderr}");
@@ -1216,9 +1216,9 @@ description = "Bare minimum"
 
     #[test]
     fn skills_dir_path() {
-        let base = std::path::Path::new("/home/user/.zeroclaw");
+        let base = std::path::Path::new("/home/user/.zerospider");
         let dir = skills_dir(base);
-        assert_eq!(dir, PathBuf::from("/home/user/.zeroclaw/skills"));
+        assert_eq!(dir, PathBuf::from("/home/user/.zerospider/skills"));
     }
 
     #[test]

@@ -80,9 +80,9 @@ struct ResponsesContent {
 impl OpenAiCodexProvider {
     pub fn new(options: &ProviderRuntimeOptions) -> Self {
         let state_dir = options
-            .zeroclaw_dir
+            .zerospider_dir
             .clone()
-            .unwrap_or_else(default_zeroclaw_dir);
+            .unwrap_or_else(default_zerospider_dir);
         let auth = AuthService::new(&state_dir, options.secrets_encrypt);
 
         Self {
@@ -97,10 +97,10 @@ impl OpenAiCodexProvider {
     }
 }
 
-fn default_zeroclaw_dir() -> PathBuf {
+fn default_zerospider_dir() -> PathBuf {
     directories::UserDirs::new().map_or_else(
-        || PathBuf::from(".zeroclaw"),
-        |dirs| dirs.home_dir().join(".zeroclaw"),
+        || PathBuf::from(".zerospider"),
+        |dirs| dirs.home_dir().join(".zerospider"),
     )
 }
 
@@ -386,7 +386,7 @@ impl OpenAiCodexProvider {
             .await?
             .ok_or_else(|| {
                 anyhow::anyhow!(
-                    "OpenAI Codex auth profile not found. Run `zeroclaw auth login --provider openai-codex`."
+                    "OpenAI Codex auth profile not found. Run `zerospider auth login --provider openai-codex`."
                 )
             })?;
         let account_id = profile
@@ -394,7 +394,7 @@ impl OpenAiCodexProvider {
             .or_else(|| extract_account_id_from_jwt(&access_token))
             .ok_or_else(|| {
                 anyhow::anyhow!(
-                    "OpenAI Codex account id not found in auth profile/token. Run `zeroclaw auth login --provider openai-codex` again."
+                    "OpenAI Codex account id not found in auth profile/token. Run `zerospider auth login --provider openai-codex` again."
                 )
             })?;
         let normalized_model = normalize_model_id(model);
@@ -499,7 +499,7 @@ mod tests {
 
     #[test]
     fn default_state_dir_is_non_empty() {
-        let path = default_zeroclaw_dir();
+        let path = default_zerospider_dir();
         assert!(!path.as_os_str().is_empty());
     }
 

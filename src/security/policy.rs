@@ -1649,7 +1649,7 @@ mod tests {
 
     #[test]
     fn resolved_path_blocks_outside_workspace() {
-        let workspace = std::env::temp_dir().join("zeroclaw_test_resolved_path");
+        let workspace = std::env::temp_dir().join("zerospider_test_resolved_path");
         let _ = std::fs::create_dir_all(&workspace);
 
         // Use the canonicalized workspace so starts_with checks match
@@ -1673,7 +1673,7 @@ mod tests {
         let canonical_temp = std::env::temp_dir()
             .canonicalize()
             .unwrap_or_else(|_| std::env::temp_dir());
-        let outside = canonical_temp.join("outside_workspace_zeroclaw");
+        let outside = canonical_temp.join("outside_workspace_zerospider");
         assert!(
             !policy.is_resolved_path_allowed(&outside),
             "path outside workspace must be blocked"
@@ -1685,7 +1685,7 @@ mod tests {
     #[test]
     fn resolved_path_blocks_root_escape() {
         let policy = SecurityPolicy {
-            workspace_dir: PathBuf::from("/home/zeroclaw_user/project"),
+            workspace_dir: PathBuf::from("/home/zerospider_user/project"),
             ..SecurityPolicy::default()
         };
 
@@ -1704,7 +1704,7 @@ mod tests {
     fn resolved_path_blocks_symlink_escape() {
         use std::os::unix::fs::symlink;
 
-        let root = std::env::temp_dir().join("zeroclaw_test_symlink_escape");
+        let root = std::env::temp_dir().join("zerospider_test_symlink_escape");
         let workspace = root.join("workspace");
         let outside = root.join("outside_target");
 
