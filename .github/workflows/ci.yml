@@ -36,5 +36,8 @@ jobs:
       - name: cargo test (ai-protocol feature)
         run: cargo test --workspace --features ai-protocol
 
+      - name: cargo test (ai-protocol + legacy — factory + provider_resolution)
+        run: cargo test -p zerospider --features "ai-protocol legacy-providers"
+
       - name: cargo check (protocol-only, no legacy providers)
         run: cargo check -p zerospider --no-default-features --features ai-protocol --lib
