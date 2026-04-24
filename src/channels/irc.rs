@@ -436,23 +436,25 @@ impl Channel for IrcChannel {
 
                 // CAP responses for SASL
                 "CAP" => {
-                    if sasl_pending && msg.params.iter().any(|p| p.contains("sasl")) {
-                        if msg.params.iter().any(|p| p.contains("ACK")) {
-                            // CAP * ACK :sasl — server accepted, start SASL auth
-                            let mut guard = self.writer.lock().await;
-                            if let Some(ref mut w) = *guard {
-                                Self::send_raw(w, "AUTHENTICATE PLAIN").await?;
-                            }
-                        } else if msg.params.iter().any(|p| p.contains("NAK")) {
-                            // CAP * NAK :sasl — server rejected SASL, proceed without it
-                            tracing::warn!(
-                                "IRC server does not support SASL, continuing without it"
-                            );
-                            sasl_pending = false;
-                            let mut guard = self.writer.lock().await;
-                            if let Some(ref mut w) = *guard {
-                                Self::send_raw(w, "CAP END").await?;
-                            }
+                    if sasl_pending
+                        && msg.params.iter().any(|p| p.contains("sasl"))
+                        && msg.params.iter().any(|p| p.contains("ACK"))
+                    {
+                        // CAP * ACK :sasl — server accepted, start SASL auth
+                        let mut guard = self.writer.lock().await;
+                        if let Some(ref mut w) = *guard {
+                            Self::send_raw(w, "AUTHENTICATE PLAIN").await?;
+                        }
+                    } else if sasl_pending
+                        && msg.params.iter().any(|p| p.contains("sasl"))
+                        && msg.params.iter().any(|p| p.contains("NAK"))
+                    {
+                        // CAP * NAK :sasl — server rejected SASL, proceed without it
+                        tracing::warn!("IRC server does not support SASL, continuing without it");
+                        sasl_pending = false;
+                        let mut guard = self.writer.lock().await;
+                        if let Some(ref mut w) = *guard {
+                            Self::send_raw(w, "CAP END").await?;
                         }
                     }
                 }

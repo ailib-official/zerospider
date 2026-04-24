@@ -76,8 +76,7 @@ fn required_envs(auth: &AuthConfig) -> Vec<String> {
 fn env_nonempty(name: &str) -> bool {
     std::env::var(name)
         .ok()
-        .filter(|s| !s.trim().is_empty())
-        .is_some()
+        .is_some_and(|s| !s.trim().is_empty())
 }
 
 fn load_provider_manifest(path: &Path) -> anyhow::Result<ProtocolManifest> {
