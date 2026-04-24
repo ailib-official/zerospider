@@ -2543,6 +2543,7 @@ mod tests {
 
     #[test]
     fn listed_providers_and_aliases_are_constructible() {
+        let _env_lock = env_lock();
         for provider in list_providers() {
             let result = create_provider(provider.name, Some("provider-test-credential"));
             if let Err(ref e) = result {
