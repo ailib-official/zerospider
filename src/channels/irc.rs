@@ -459,26 +459,23 @@ impl Channel for IrcChannel {
                     }
                 }
 
-                "AUTHENTICATE" => {
-                    // Server sends "AUTHENTICATE +" to request credentials
-                    if sasl_pending && msg.params.first().is_some_and(|p| p == "+") {
-                        // sasl_password is loaded from runtime config, not hard-coded
-                        if let Some(password) = self.sasl_password.as_deref() {
-                            let encoded = encode_sasl_plain(&current_nick, password);
-                            let mut guard = self.writer.lock().await;
-                            if let Some(ref mut w) = *guard {
-                                Self::send_raw(w, &format!("AUTHENTICATE {encoded}")).await?;
-                            }
-                        } else {
-                            // SASL was requested but no password is configured; abort SASL
-                            tracing::warn!(
-                                "SASL authentication requested but no SASL password is configured; aborting SASL"
-                            );
-                            sasl_pending = false;
-                            let mut guard = self.writer.lock().await;
-                            if let Some(ref mut w) = *guard {
-                                Self::send_raw(w, "CAP END").await?;
-                            }
+                "AUTHENTICATE" if sasl_pending && msg.params.first().is_some_and(|p| p == "+") => {
+                    // sasl_password is loaded from runtime config, not hard-coded
+                    if let Some(password) = self.sasl_password.as_deref() {
+                        let encoded = encode_sasl_plain(&current_nick, password);
+                        let mut guard = self.writer.lock().await;
+                        if let Some(ref mut w) = *guard {
+                            Self::send_raw(w, &format!("AUTHENTICATE {encoded}")).await?;
+                        }
+                    } else {
+                        // SASL was requested but no password is configured; abort SASL
+                        tracing::warn!(
+                            "SASL authentication requested but no SASL password is configured; aborting SASL"
+                        );
+                        sasl_pending = false;
+                        let mut guard = self.writer.lock().await;
+                        if let Some(ref mut w) = *guard {
+                            Self::send_raw(w, "CAP END").await?;
                         }
                     }
                 }
