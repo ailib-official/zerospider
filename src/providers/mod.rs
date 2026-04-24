@@ -2544,15 +2544,22 @@ mod tests {
     #[test]
     fn listed_providers_and_aliases_are_constructible() {
         for provider in list_providers() {
+            let result = create_provider(provider.name, Some("provider-test-credential"));
+            if let Err(ref e) = result {
+                eprintln!("FAIL: canonical '{}' => {}", provider.name, e);
+            }
             assert!(
-                create_provider(provider.name, Some("provider-test-credential")).is_ok(),
+                result.is_ok(),
                 "Canonical provider id should be constructible: {}",
                 provider.name
             );
-
             for alias in provider.aliases {
+                let result = create_provider(alias, Some("provider-test-credential"));
+                if let Err(ref e) = result {
+                    eprintln!("FAIL: alias '{}' (for {}) => {}", alias, provider.name, e);
+                }
                 assert!(
-                    create_provider(alias, Some("provider-test-credential")).is_ok(),
+                    result.is_ok(),
                     "Provider alias should be constructible: {} (for {})",
                     alias,
                     provider.name
@@ -2560,7 +2567,6 @@ mod tests {
             }
         }
     }
-
     // ── API error sanitization ───────────────────────────────
 
     #[test]
