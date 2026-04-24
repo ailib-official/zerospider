@@ -88,10 +88,29 @@ dependencies = [
 ]
 
 [[package]]
-name = "ai-lib-rust"
-version = "0.8.5"
+name = "ai-lib-contact"
+version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b71c1a5279edfc8d4620b66c449073f14c771374fc172cd9a73daed66b78e763"
+checksum = "49ac886f5c50ce16b096ceb2aa8d3720dcb9d45ac41c53f955b80a4381954cfd"
+dependencies = [
+ "ai-lib-core",
+ "async-trait",
+ "futures",
+ "lru",
+ "once_cell",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "ai-lib-core"
+version = "0.9.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "114c1492c0ab865f4bfa197f1eff7dc3fc259b94fef744a982d9dbd12414f312"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -114,6 +133,43 @@ dependencies = [
  "sha2",
  "thiserror 1.0.69",
  "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "uuid",
+]
+
+[[package]]
+name = "ai-lib-rust"
+version = "0.9.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b78ce58ff9e9ff3ad73c50102c6be06a664ec167b86f6d85b568033d803ae8b5"
+dependencies = [
+ "ai-lib-contact",
+ "ai-lib-core",
+ "anyhow",
+ "arc-swap",
+ "async-recursion",
+ "async-trait",
+ "base64 0.22.1",
+ "bytes",
+ "futures",
+ "jsonschema",
+ "keyring",
+ "lru",
+ "notify",
+ "once_cell",
+ "regex",
+ "reqwest 0.11.27",
+ "schemars 0.8.22",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha2",
+ "thiserror 1.0.69",
+ "tokio",
+ "tokio-stream",
  "tokio-util",
  "tracing",
  "tracing-subscriber",
@@ -8809,6 +8865,7 @@ dependencies = [
  "ai-lib-rust",
  "anyhow",
  "async-imap",
+ "async-stream",
  "async-trait",
  "axum",
  "base64 0.22.1",
@@ -8858,6 +8915,7 @@ dependencies = [
  "serde-big-array",
  "serde_ignored",
  "serde_json",
+ "serde_yaml",
  "sha2",
  "shellexpand",
  "tempfile",

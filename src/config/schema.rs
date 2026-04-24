@@ -51,7 +51,7 @@ static RUNTIME_PROXY_CLIENT_CACHE: OnceLock<RwLock<HashMap<String, reqwest::Clie
 
 /// Top-level ZeroClaw configuration, loaded from `config.toml`.
 ///
-/// Resolution order: `ZEROCLAW_WORKSPACE` env → `active_workspace.toml` marker → `~/.zeroclaw/config.toml`.
+/// Resolution order: `ZEROCLAW_WORKSPACE` env → `active_workspace.toml` marker → `~/.zerospider/config.toml`.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct Config {
     /// Workspace directory - computed from home, not serialized
@@ -367,7 +367,7 @@ fn parse_skills_prompt_injection_mode(raw: &str) -> Option<SkillsPromptInjection
 }
 
 /// Skills loading configuration (`[skills]` section).
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 pub struct SkillsConfig {
     /// Enable loading and syncing the community open-skills repository.
     /// Default: `false` (opt-in).
@@ -381,16 +381,6 @@ pub struct SkillsConfig {
     /// `full` preserves legacy behavior. `compact` keeps context small and loads skills on demand.
     #[serde(default)]
     pub prompt_injection_mode: SkillsPromptInjectionMode,
-}
-
-impl Default for SkillsConfig {
-    fn default() -> Self {
-        Self {
-            open_skills_enabled: false,
-            open_skills_dir: None,
-            prompt_injection_mode: SkillsPromptInjectionMode::default(),
-        }
-    }
 }
 
 /// Multimodal (image) handling configuration (`[multimodal]` section).
@@ -1442,7 +1432,7 @@ pub fn build_runtime_proxy_client_with_timeouts(
 fn parse_proxy_scope(raw: &str) -> Option<ProxyScope> {
     match raw.trim().to_ascii_lowercase().as_str() {
         "environment" | "env" => Some(ProxyScope::Environment),
-        "zeroclaw" | "internal" | "core" => Some(ProxyScope::Zeroclaw),
+        "zerospider" | "internal" | "core" => Some(ProxyScope::Zeroclaw),
         "services" | "service" => Some(ProxyScope::Services),
         _ => None,
     }
@@ -1687,7 +1677,7 @@ pub struct ObservabilityConfig {
     #[serde(default)]
     pub otel_endpoint: Option<String>,
 
-    /// Service name reported to the OTel collector. Defaults to "zeroclaw".
+    /// Service name reported to the OTel collector. Defaults to "zerospider".
     #[serde(default)]
     pub otel_service_name: Option<String>,
 }
@@ -2228,7 +2218,7 @@ pub struct CustomTunnelConfig {
 // ── Deploy ───────────────────────────────────────────────────────
 
 /// Remote deployment configuration for ZeroSpider to other servers.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 pub struct DeployConfig {
     /// List of deployment targets (servers).
     #[serde(default)]
@@ -2314,15 +2304,6 @@ fn default_deploy_working_dir() -> String {
 
 fn default_health_check_interval() -> u64 {
     30
-}
-
-impl Default for DeployConfig {
-    fn default() -> Self {
-        Self {
-            servers: Vec::new(),
-            settings: DeploymentSettingsConfig::default(),
-        }
-    }
 }
 
 impl Default for DeploymentSettingsConfig {
@@ -2864,7 +2845,7 @@ pub struct AuditConfig {
     #[serde(default = "default_audit_enabled")]
     pub enabled: bool,
 
-    /// Path to audit log file (relative to zeroclaw dir)
+    /// Path to audit log file (relative to zerospider dir)
     #[serde(default = "default_audit_log_path")]
     pub log_path: String,
 
@@ -2930,11 +2911,11 @@ impl Default for Config {
     fn default() -> Self {
         let home =
             UserDirs::new().map_or_else(|| PathBuf::from("."), |u| u.home_dir().to_path_buf());
-        let zeroclaw_dir = home.join(".zeroclaw");
+        let zerospider_dir = home.join(".zerospider");
 
         Self {
-            workspace_dir: zeroclaw_dir.join("workspace"),
-            config_path: zeroclaw_dir.join("config.toml"),
+            workspace_dir: zerospider_dir.join("workspace"),
+            config_path: zerospider_dir.join("config.toml"),
             api_key: None,
             api_url: None,
             default_provider: Some("openrouter".to_string()),
@@ -2990,7 +2971,7 @@ fn default_config_dir() -> Result<PathBuf> {
     let home = UserDirs::new()
         .map(|u| u.home_dir().to_path_buf())
         .context("Could not find home directory")?;
-    Ok(home.join(".zeroclaw"))
+    Ok(home.join(".zerospider"))
 }
 
 fn active_workspace_state_path(default_dir: &Path) -> PathBuf {
@@ -3110,7 +3091,7 @@ fn resolve_config_dir_for_workspace(workspace_dir: &Path) -> (PathBuf, PathBuf) 
 
     let legacy_config_dir = workspace_dir
         .parent()
-        .map(|parent| parent.join(".zeroclaw"));
+        .map(|parent| parent.join(".zerospider"));
     if let Some(legacy_dir) = legacy_config_dir {
         if legacy_dir.join("config.toml").exists() {
             return (legacy_dir, workspace_config_dir);
@@ -3150,16 +3131,16 @@ impl ConfigResolutionSource {
 }
 
 async fn resolve_runtime_config_dirs(
-    default_zeroclaw_dir: &Path,
+    default_zerospider_dir: &Path,
     default_workspace_dir: &Path,
 ) -> Result<(PathBuf, PathBuf, ConfigResolutionSource)> {
     if let Ok(custom_config_dir) = std::env::var("ZEROCLAW_CONFIG_DIR") {
         let custom_config_dir = custom_config_dir.trim();
         if !custom_config_dir.is_empty() {
-            let zeroclaw_dir = PathBuf::from(custom_config_dir);
+            let zerospider_dir = PathBuf::from(custom_config_dir);
             return Ok((
-                zeroclaw_dir.clone(),
-                zeroclaw_dir.join("workspace"),
+                zerospider_dir.clone(),
+                zerospider_dir.join("workspace"),
                 ConfigResolutionSource::EnvConfigDir,
             ));
         }
@@ -3167,28 +3148,28 @@ async fn resolve_runtime_config_dirs(
 
     if let Ok(custom_workspace) = std::env::var("ZEROCLAW_WORKSPACE") {
         if !custom_workspace.is_empty() {
-            let (zeroclaw_dir, workspace_dir) =
+            let (zerospider_dir, workspace_dir) =
                 resolve_config_dir_for_workspace(&PathBuf::from(custom_workspace));
             return Ok((
-                zeroclaw_dir,
+                zerospider_dir,
                 workspace_dir,
                 ConfigResolutionSource::EnvWorkspace,
             ));
         }
     }
 
-    if let Some((zeroclaw_dir, workspace_dir)) =
-        load_persisted_workspace_dirs(default_zeroclaw_dir).await?
+    if let Some((zerospider_dir, workspace_dir)) =
+        load_persisted_workspace_dirs(default_zerospider_dir).await?
     {
         return Ok((
-            zeroclaw_dir,
+            zerospider_dir,
             workspace_dir,
             ConfigResolutionSource::ActiveWorkspaceMarker,
         ));
     }
 
     Ok((
-        default_zeroclaw_dir.to_path_buf(),
+        default_zerospider_dir.to_path_buf(),
         default_workspace_dir.to_path_buf(),
         ConfigResolutionSource::DefaultConfigDir,
     ))
@@ -3231,7 +3212,7 @@ fn encrypt_optional_secret(
 fn config_dir_creation_error(path: &Path) -> String {
     format!(
         "Failed to create config directory: {}. If running as an OpenRC service, \
-         ensure this path is writable by user 'zeroclaw'.",
+         ensure this path is writable by user 'zerospider'.",
         path.display()
     )
 }
@@ -3266,16 +3247,16 @@ fn has_ollama_cloud_credential(config_api_key: Option<&str>) -> bool {
 
 impl Config {
     pub async fn load_or_init() -> Result<Self> {
-        let (default_zeroclaw_dir, default_workspace_dir) = default_config_and_workspace_dirs()?;
+        let (default_zerospider_dir, default_workspace_dir) = default_config_and_workspace_dirs()?;
 
-        let (zeroclaw_dir, workspace_dir, resolution_source) =
-            resolve_runtime_config_dirs(&default_zeroclaw_dir, &default_workspace_dir).await?;
+        let (zerospider_dir, workspace_dir, resolution_source) =
+            resolve_runtime_config_dirs(&default_zerospider_dir, &default_workspace_dir).await?;
 
-        let config_path = zeroclaw_dir.join("config.toml");
+        let config_path = zerospider_dir.join("config.toml");
 
-        fs::create_dir_all(&zeroclaw_dir)
+        fs::create_dir_all(&zerospider_dir)
             .await
-            .with_context(|| config_dir_creation_error(&zeroclaw_dir))?;
+            .with_context(|| config_dir_creation_error(&zerospider_dir))?;
         fs::create_dir_all(&workspace_dir)
             .await
             .context("Failed to create workspace directory")?;
@@ -3323,7 +3304,7 @@ impl Config {
             // Set computed paths that are skipped during serialization
             config.config_path = config_path.clone();
             config.workspace_dir = workspace_dir;
-            let store = crate::security::SecretStore::new(&zeroclaw_dir, config.secrets.encrypt);
+            let store = crate::security::SecretStore::new(&zerospider_dir, config.secrets.encrypt);
             decrypt_optional_secret(&store, &mut config.api_key, "config.api_key")?;
             decrypt_optional_secret(
                 &store,
@@ -3726,7 +3707,7 @@ impl Config {
             } else {
                 tracing::warn!(
                     scope = %scope_raw,
-                    "Ignoring invalid ZEROCLAW_PROXY_SCOPE (valid: environment|zeroclaw|services)"
+                    "Ignoring invalid ZEROCLAW_PROXY_SCOPE (valid: environment|zerospider|services)"
                 );
             }
         }
@@ -3750,11 +3731,11 @@ impl Config {
     pub async fn save(&self) -> Result<()> {
         // Encrypt secrets before serialization
         let mut config_to_save = self.clone();
-        let zeroclaw_dir = self
+        let zerospider_dir = self
             .config_path
             .parent()
             .context("Config path must have a parent directory")?;
-        let store = crate::security::SecretStore::new(zeroclaw_dir, self.secrets.encrypt);
+        let store = crate::security::SecretStore::new(zerospider_dir, self.secrets.encrypt);
 
         encrypt_optional_secret(&store, &mut config_to_save.api_key, "config.api_key")?;
         encrypt_optional_secret(
@@ -3861,6 +3842,7 @@ impl Config {
     }
 }
 
+#[cfg_attr(not(unix), allow(clippy::unused_async))]
 async fn sync_directory(path: &Path) -> Result<()> {
     #[cfg(unix)]
     {
@@ -3870,7 +3852,7 @@ async fn sync_directory(path: &Path) -> Result<()> {
         dir.sync_all()
             .await
             .with_context(|| format!("Failed to fsync directory metadata: {}", path.display()))?;
-        return Ok(());
+        Ok(())
     }
 
     #[cfg(not(unix))]
@@ -3911,10 +3893,10 @@ mod tests {
 
     #[test]
     async fn config_dir_creation_error_mentions_openrc_and_path() {
-        let msg = config_dir_creation_error(Path::new("/etc/zeroclaw"));
-        assert!(msg.contains("/etc/zeroclaw"));
+        let msg = config_dir_creation_error(Path::new("/etc/zerospider"));
+        assert!(msg.contains("/etc/zerospider"));
         assert!(msg.contains("OpenRC"));
-        assert!(msg.contains("zeroclaw"));
+        assert!(msg.contains("zerospider"));
     }
 
     #[test]
@@ -4189,7 +4171,7 @@ default_temperature = 0.7
 
 [storage.provider.config]
 provider = "postgres"
-dbURL = "postgres://postgres:postgres@localhost:5432/zeroclaw"
+dbURL = "postgres://postgres:postgres@localhost:5432/zerospider"
 schema = "public"
 table = "memories"
 connect_timeout_secs = 12
@@ -4199,7 +4181,7 @@ connect_timeout_secs = 12
         assert_eq!(parsed.storage.provider.config.provider, "postgres");
         assert_eq!(
             parsed.storage.provider.config.db_url.as_deref(),
-            Some("postgres://postgres:postgres@localhost:5432/zeroclaw")
+            Some("postgres://postgres:postgres@localhost:5432/zerospider")
         );
         assert_eq!(parsed.storage.provider.config.schema, "public");
         assert_eq!(parsed.storage.provider.config.table, "memories");
@@ -4254,7 +4236,7 @@ tool_dispatcher = "xml"
     #[tokio::test]
     async fn sync_directory_handles_existing_directory() {
         let dir = std::env::temp_dir().join(format!(
-            "zeroclaw_test_sync_directory_{}",
+            "zerospider_test_sync_directory_{}",
             uuid::Uuid::new_v4()
         ));
         fs::create_dir_all(&dir).await.unwrap();
@@ -4266,7 +4248,7 @@ tool_dispatcher = "xml"
 
     #[tokio::test]
     async fn config_save_and_load_tmpdir() {
-        let dir = std::env::temp_dir().join("zeroclaw_test_config");
+        let dir = std::env::temp_dir().join("zerospider_test_config");
         let _ = fs::remove_dir_all(&dir).await;
         fs::create_dir_all(&dir).await.unwrap();
 
@@ -4332,7 +4314,7 @@ tool_dispatcher = "xml"
     #[tokio::test]
     async fn config_save_encrypts_nested_credentials() {
         let dir = std::env::temp_dir().join(format!(
-            "zeroclaw_test_nested_credentials_{}",
+            "zerospider_test_nested_credentials_{}",
             uuid::Uuid::new_v4()
         ));
         fs::create_dir_all(&dir).await.unwrap();
@@ -4418,7 +4400,7 @@ tool_dispatcher = "xml"
     #[tokio::test]
     async fn config_save_atomic_cleanup() {
         let dir =
-            std::env::temp_dir().join(format!("zeroclaw_test_config_{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("zerospider_test_config_{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&dir).await.unwrap();
 
         let config_path = dir.join("config.toml");
@@ -4821,7 +4803,7 @@ channel_id = "C123"
             phone_number_id: Some("123".into()),
             verify_token: Some("ver".into()),
             app_secret: None,
-            session_path: Some("~/.zeroclaw/state/whatsapp-web/session.db".into()),
+            session_path: Some("~/.zerospider/state/whatsapp-web/session.db".into()),
             pair_phone: None,
             pair_code: None,
             allowed_numbers: vec!["+1".into()],
@@ -4837,7 +4819,7 @@ channel_id = "C123"
             phone_number_id: None,
             verify_token: None,
             app_secret: None,
-            session_path: Some("~/.zeroclaw/state/whatsapp-web/session.db".into()),
+            session_path: Some("~/.zerospider/state/whatsapp-web/session.db".into()),
             pair_phone: None,
             pair_code: None,
             allowed_numbers: vec![],
@@ -5567,10 +5549,11 @@ default_temperature = 0.7
     }
 
     #[test]
+    #[cfg(unix)]
     async fn load_or_init_workspace_override_uses_workspace_root_for_config() {
         let _env_guard = env_override_lock().await;
         let temp_home =
-            std::env::temp_dir().join(format!("zeroclaw_test_home_{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("zerospider_test_home_{}", uuid::Uuid::new_v4()));
         let workspace_dir = temp_home.join("profile-a");
 
         let original_home = std::env::var("HOME").ok();
@@ -5593,12 +5576,13 @@ default_temperature = 0.7
     }
 
     #[test]
+    #[cfg(unix)]
     async fn load_or_init_workspace_suffix_uses_legacy_config_layout() {
         let _env_guard = env_override_lock().await;
         let temp_home =
-            std::env::temp_dir().join(format!("zeroclaw_test_home_{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("zerospider_test_home_{}", uuid::Uuid::new_v4()));
         let workspace_dir = temp_home.join("workspace");
-        let legacy_config_path = temp_home.join(".zeroclaw").join("config.toml");
+        let legacy_config_path = temp_home.join(".zerospider").join("config.toml");
 
         let original_home = std::env::var("HOME").ok();
         std::env::set_var("HOME", &temp_home);
@@ -5620,12 +5604,13 @@ default_temperature = 0.7
     }
 
     #[test]
+    #[cfg(unix)]
     async fn load_or_init_workspace_override_keeps_existing_legacy_config() {
         let _env_guard = env_override_lock().await;
         let temp_home =
-            std::env::temp_dir().join(format!("zeroclaw_test_home_{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("zerospider_test_home_{}", uuid::Uuid::new_v4()));
         let workspace_dir = temp_home.join("custom-workspace");
-        let legacy_config_dir = temp_home.join(".zeroclaw");
+        let legacy_config_dir = temp_home.join(".zerospider");
         let legacy_config_path = legacy_config_dir.join("config.toml");
 
         fs::create_dir_all(&legacy_config_dir).await.unwrap();
@@ -5658,10 +5643,11 @@ default_model = "legacy-model"
     }
 
     #[test]
+    #[cfg(unix)]
     async fn load_or_init_uses_persisted_active_workspace_marker() {
         let _env_guard = env_override_lock().await;
         let temp_home =
-            std::env::temp_dir().join(format!("zeroclaw_test_home_{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("zerospider_test_home_{}", uuid::Uuid::new_v4()));
         let custom_config_dir = temp_home.join("profiles").join("agent-alpha");
 
         fs::create_dir_all(&custom_config_dir).await.unwrap();
@@ -5695,10 +5681,11 @@ default_model = "legacy-model"
     }
 
     #[test]
+    #[cfg(unix)]
     async fn load_or_init_env_workspace_override_takes_priority_over_marker() {
         let _env_guard = env_override_lock().await;
         let temp_home =
-            std::env::temp_dir().join(format!("zeroclaw_test_home_{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("zerospider_test_home_{}", uuid::Uuid::new_v4()));
         let marker_config_dir = temp_home.join("profiles").join("persisted-profile");
         let env_workspace_dir = temp_home.join("env-workspace");
 
@@ -5732,11 +5719,12 @@ default_model = "legacy-model"
     }
 
     #[test]
+    #[cfg(unix)]
     async fn persist_active_workspace_marker_is_cleared_for_default_config_dir() {
         let _env_guard = env_override_lock().await;
         let temp_home =
-            std::env::temp_dir().join(format!("zeroclaw_test_home_{}", uuid::Uuid::new_v4()));
-        let default_config_dir = temp_home.join(".zeroclaw");
+            std::env::temp_dir().join(format!("zerospider_test_home_{}", uuid::Uuid::new_v4()));
+        let default_config_dir = temp_home.join(".zerospider");
         let custom_config_dir = temp_home.join("profiles").join("custom-profile");
         let marker_path = default_config_dir.join(ACTIVE_WORKSPACE_STATE_FILE);
 

@@ -19,7 +19,7 @@ pub async fn handle_command(
         crate::deploy::DeployCommands::Deploy { server } => {
             handle_deploy(&server, &targets, deploy_config.clone()).await
         }
-        crate::deploy::DeployCommands::Status { server } => handle_status(&server, &targets).await,
+        crate::deploy::DeployCommands::Status { server } => handle_status(&server, &targets),
         crate::deploy::DeployCommands::HealthCheck { server } => {
             handle_health_check(&server, &targets).await
         }
@@ -30,9 +30,7 @@ pub async fn handle_command(
         crate::deploy::DeployCommands::Update { server, version } => {
             handle_update(&server, version, &targets, deploy_config.clone()).await
         }
-        crate::deploy::DeployCommands::SyncConfig { server } => {
-            handle_sync_config(&server, config).await
-        }
+        crate::deploy::DeployCommands::SyncConfig { server } => handle_sync_config(&server, config),
         crate::deploy::DeployCommands::Validate { server } => {
             handle_validate(&server, &targets, deploy_config.clone()).await
         }
@@ -56,7 +54,7 @@ fn load_deploy_config(
         .deploy
         .servers
         .iter()
-        .map(|cfg| convert_target_config(cfg))
+        .map(convert_target_config)
         .collect();
     targets
 }
@@ -69,21 +67,21 @@ fn convert_target_config(
     let labels: HashMap<String, String> = cfg
         .labels
         .iter()
-        .filter_map(|label| {
+        .map(|label| {
             // Parse key:value format
             if let Some((key, value)) = label.split_once(':') {
-                Some((key.to_string(), value.to_string()))
+                (key.to_string(), value.to_string())
             } else if let Some((key, value)) = label.split_once('=') {
-                Some((key.to_string(), value.to_string()))
+                (key.to_string(), value.to_string())
             } else {
                 // If no separator, use the label as both key and value
-                Some((label.clone(), label.clone()))
+                (label.clone(), label.clone())
             }
         })
         .collect();
 
     // Convert ssh_key string to path
-    let ssh_key_path = cfg.ssh_key.as_ref().map(|s| PathBuf::from(s));
+    let ssh_key_path = cfg.ssh_key.as_ref().map(PathBuf::from);
 
     Ok(crate::deploy::remote::DeploymentTarget {
         id: cfg.id.clone(),
@@ -119,7 +117,7 @@ fn create_deployment_config(
         version: version.to_string(),
         local_binary,
         binary_path: PathBuf::from(&settings.binary_path),
-        config_path: settings.config_path.as_ref().map(|p| PathBuf::from(p)),
+        config_path: settings.config_path.as_ref().map(PathBuf::from),
         env_vars: HashMap::new(),
         working_dir: PathBuf::from(&settings.working_dir),
         auto_start: settings.auto_start,
@@ -158,7 +156,7 @@ async fn handle_deploy(
 }
 
 /// Handle status command.
-async fn handle_status(
+fn handle_status(
     server_id: &str,
     targets: &[crate::deploy::remote::DeploymentTarget],
 ) -> Result<()> {
@@ -313,7 +311,7 @@ async fn handle_update(
 }
 
 /// Handle sync-config command.
-async fn handle_sync_config(_server_id: &str, _config: &Config) -> Result<()> {
+fn handle_sync_config(_server_id: &str, _config: &Config) -> Result<()> {
     bail!(
         "sync-config is not yet implemented. \
          To update the remote configuration, manually edit the config file on the target server \
@@ -355,8 +353,8 @@ async fn handle_validate(
 
     // Test SSH connectivity
     println!("1️⃣ Testing SSH connectivity...");
-    match test_ssh_connection(&target).await {
-        Ok(_) => println!("   ✅ SSH connection successful"),
+    match test_ssh_connection(target).await {
+        Ok(()) => println!("   ✅ SSH connection successful"),
         Err(e) => {
             println!("   ❌ SSH connection failed: {}", e);
             has_errors = true;
@@ -372,8 +370,8 @@ async fn handle_validate(
     ];
     for (i, _dir) in test_dirs.iter().enumerate() {
         let full_dir = test_dirs[i];
-        match test_directory_permission(&target, full_dir).await {
-            Ok(_) => println!("   ✅ Can write to {}", full_dir),
+        match test_directory_permission(target, full_dir).await {
+            Ok(()) => println!("   ✅ Can write to {}", full_dir),
             Err(e) => {
                 println!("   ⚠️  Cannot write to {} (may need sudo): {}", full_dir, e);
                 has_warnings = true;
@@ -386,7 +384,7 @@ async fn handle_validate(
     println!("3️⃣ Checking mode-specific requirements ({:?})...", mode);
     let mode_clone = mode.clone();
     match mode_clone {
-        DeploymentMode::Docker => match test_docker_available(&target).await {
+        DeploymentMode::Docker => match test_docker_available(target).await {
             Ok(()) => println!("   ✅ Docker is available"),
             Err(e) => {
                 println!("   ❌ Docker check failed: {}", e);
@@ -394,7 +392,7 @@ async fn handle_validate(
             }
         },
         DeploymentMode::Systemd => {
-            match test_systemctl_available(&target).await {
+            match test_systemctl_available(target).await {
                 Ok(()) => println!("   ✅ systemctl is available"),
                 Err(e) => {
                     println!("   ⚠️  systemctl check failed (may need sudo): {}", e);
@@ -405,7 +403,7 @@ async fn handle_validate(
                 println!("   ℹ️  use_sudo is enabled - systemctl commands will use sudo");
             }
         }
-        _ => {
+        DeploymentMode::Direct => {
             println!("   ✅ No mode-specific requirements for Direct mode");
         }
     }
@@ -416,7 +414,7 @@ async fn handle_validate(
         println!("4️⃣ Checking sudo configuration...");
         let mut deployer = RemoteDeployer::new(mode.clone());
         deployer.register_target(target.clone());
-        match test_sudo_available(&target).await {
+        match test_sudo_available(target).await {
             Ok(()) => println!("   ✅ sudo is available"),
             Err(e) => {
                 println!("   ⚠️  sudo check failed: {}", e);

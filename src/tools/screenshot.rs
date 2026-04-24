@@ -173,7 +173,8 @@ impl ScreenshotTool {
                 let size = bytes.len();
                 let mut encoded = base64::engine::general_purpose::STANDARD.encode(&bytes);
                 let truncated = if encoded.len() > MAX_BASE64_BYTES {
-                    encoded.truncate(encoded.floor_char_boundary(MAX_BASE64_BYTES));
+                    let n = crate::util::floor_char_boundary(&encoded, MAX_BASE64_BYTES);
+                    encoded.truncate(n);
                     true
                 } else {
                     false
@@ -312,6 +313,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     fn screenshot_command_contains_output_path() {
         let cmd = ScreenshotTool::screenshot_command("/tmp/my_screenshot.png").unwrap();
         let joined = cmd.join(" ");

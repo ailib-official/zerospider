@@ -396,8 +396,8 @@ impl TelegramChannel {
         let home = UserDirs::new()
             .map(|u| u.home_dir().to_path_buf())
             .context("Could not find home directory")?;
-        let zeroclaw_dir = home.join(".zeroclaw");
-        let config_path = zeroclaw_dir.join("config.toml");
+        let zerospider_dir = home.join(".zerospider");
+        let config_path = zerospider_dir.join("config.toml");
 
         let contents = fs::read_to_string(&config_path)
             .await
@@ -406,7 +406,7 @@ impl TelegramChannel {
             "Failed to parse config.toml — check [channels.telegram] section for syntax errors",
         )?;
         config.config_path = config_path;
-        config.workspace_dir = zeroclaw_dir.join("workspace");
+        config.workspace_dir = zerospider_dir.join("workspace");
         Ok(config)
     }
 
@@ -416,7 +416,7 @@ impl TelegramChannel {
             anyhow::bail!(
                 "Missing [channels.telegram] section in config.toml. \
                 Add bot_token and allowed_users under [channels.telegram], \
-                or run `zeroclaw onboard --channels-only` to configure interactively"
+                or run `zerospider onboard --channels-only` to configure interactively"
             );
         };
 
@@ -740,7 +740,7 @@ Allowlist Telegram username (without '@') or numeric user ID.",
         let _ = self
             .send(&SendMessage::new(
                 format!(
-                    "🔐 This bot requires operator approval.\n\nCopy this command to operator terminal:\n`zeroclaw channel bind-telegram {suggested_identity}`\n\nAfter operator runs it, send your message again."
+                    "🔐 This bot requires operator approval.\n\nCopy this command to operator terminal:\n`zerospider channel bind-telegram {suggested_identity}`\n\nAfter operator runs it, send your message again."
                 ),
                 &chat_id,
             ))
@@ -778,8 +778,7 @@ Allowlist Telegram username (without '@') or numeric user ID.",
         // Require at least text, caption, or photo
         let text = match (text_opt, caption_opt, &photo_file_id) {
             (Some(t), _, _) => t.to_string(),
-            (None, Some(c), Some(_)) => c.to_string(),
-            (None, Some(c), None) => c.to_string(),
+            (None, Some(c), Some(_) | None) => c.to_string(),
             (None, None, Some(_)) => String::new(), // will be filled with image marker later
             (None, None, None) => return None,
         };
@@ -1916,7 +1915,7 @@ impl Channel for TelegramChannel {
                 if error_code == 409 {
                     tracing::warn!(
                         "Telegram polling conflict (409): {description}. \
-Ensure only one `zeroclaw` process is using this bot token."
+Ensure only one `zerospider` process is using this bot token."
                     );
                     // Back off for 35 seconds — longer than Telegram's 30-second poll
                     // timeout — so any competing session (e.g. a stale connection from
@@ -2244,7 +2243,7 @@ mod tests {
     #[test]
     fn telegram_extract_bind_code_supports_bot_mention() {
         assert_eq!(
-            TelegramChannel::extract_bind_code("/bind@zeroclaw_bot 654321"),
+            TelegramChannel::extract_bind_code("/bind@zerospider_bot 654321"),
             Some("654321")
         );
     }
@@ -3100,7 +3099,11 @@ mod tests {
 
     #[test]
     fn telegram_split_many_short_lines() {
-        let msg: String = (0..1000).map(|i| format!("line {i}\n")).collect();
+        let msg: String = (0..1000).fold(String::new(), |mut acc, i| {
+            use std::fmt::Write as _;
+            let _ = writeln!(acc, "line {i}");
+            acc
+        });
         let parts = split_message_for_telegram(&msg);
         for part in &parts {
             assert!(

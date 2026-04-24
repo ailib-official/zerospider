@@ -24,8 +24,6 @@ pub mod uno_q_setup;
 #[cfg(all(feature = "peripheral-rpi", target_os = "linux"))]
 pub mod rpi;
 
-pub use traits::Peripheral;
-
 use crate::config::{Config, PeripheralBoardConfig, PeripheralsConfig};
 #[cfg(feature = "hardware")]
 use crate::tools::HardwareMemoryMapTool;
@@ -40,7 +38,7 @@ pub fn list_configured_boards(config: &PeripheralsConfig) -> Vec<&PeripheralBoar
     config.boards.iter().collect()
 }
 
-/// Handle `zeroclaw peripheral` subcommands.
+/// Handle `zerospider peripheral` subcommands.
 #[allow(clippy::module_name_repetitions)]
 pub async fn handle_command(cmd: crate::PeripheralCommands, config: &Config) -> Result<()> {
     match cmd {
@@ -49,8 +47,8 @@ pub async fn handle_command(cmd: crate::PeripheralCommands, config: &Config) -> 
             if boards.is_empty() {
                 println!("No peripherals configured.");
                 println!();
-                println!("Add one with: zeroclaw peripheral add <board> <path>");
-                println!("  Example: zeroclaw peripheral add nucleo-f401re /dev/ttyACM0");
+                println!("Add one with: zerospider peripheral add <board> <path>");
+                println!("  Example: zerospider peripheral add nucleo-f401re /dev/ttyACM0");
                 println!();
                 println!("Or add to config.toml:");
                 println!("  [peripherals]");
@@ -229,6 +227,7 @@ pub async fn create_peripheral_tools(config: &PeripheralsConfig) -> Result<Vec<B
 
 #[cfg(not(feature = "hardware"))]
 pub async fn create_peripheral_tools(_config: &PeripheralsConfig) -> Result<Vec<Box<dyn Tool>>> {
+    std::future::ready(()).await;
     Ok(Vec::new())
 }
 

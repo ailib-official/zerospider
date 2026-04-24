@@ -560,6 +560,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(unix)] // `run_job_command` spawns `sh -lc`
     async fn run_job_command_success() {
         let tmp = TempDir::new().unwrap();
         let config = test_config(&tmp).await;
@@ -573,6 +574,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(unix)]
     async fn run_job_command_failure() {
         let tmp = TempDir::new().unwrap();
         let config = test_config(&tmp).await;
@@ -586,6 +588,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(unix)]
     async fn run_job_command_times_out() {
         let tmp = TempDir::new().unwrap();
         let mut config = test_config(&tmp).await;
@@ -657,6 +660,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(unix)]
     async fn execute_job_with_retry_recovers_after_first_failure() {
         let tmp = TempDir::new().unwrap();
         let mut config = test_config(&tmp).await;
@@ -679,6 +683,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(unix)]
     async fn execute_job_with_retry_exhausts_attempts() {
         let tmp = TempDir::new().unwrap();
         let mut config = test_config(&tmp).await;

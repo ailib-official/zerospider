@@ -9,6 +9,9 @@ use std::fmt::Write;
 pub struct ChatMessage {
     pub role: String,
     pub content: String,
+    /// OpenAI-style tool result linkage (`role: tool`). Required for correct ai-lib mapping.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_call_id: Option<String>,
 }
 
 impl ChatMessage {
@@ -16,6 +19,7 @@ impl ChatMessage {
         Self {
             role: "system".into(),
             content: content.into(),
+            tool_call_id: None,
         }
     }
 
@@ -23,6 +27,7 @@ impl ChatMessage {
         Self {
             role: "user".into(),
             content: content.into(),
+            tool_call_id: None,
         }
     }
 
@@ -30,13 +35,25 @@ impl ChatMessage {
         Self {
             role: "assistant".into(),
             content: content.into(),
+            tool_call_id: None,
         }
     }
 
+    /// Tool result without `tool_call_id` (legacy). Prefer [`Self::tool_with_call_id`].
     pub fn tool(content: impl Into<String>) -> Self {
         Self {
             role: "tool".into(),
             content: content.into(),
+            tool_call_id: None,
+        }
+    }
+
+    /// Tool result message for multi-turn tool calling (ARCH-003 / ai-lib `Message::tool`).
+    pub fn tool_with_call_id(tool_call_id: impl Into<String>, content: impl Into<String>) -> Self {
+        Self {
+            role: "tool".into(),
+            content: content.into(),
+            tool_call_id: Some(tool_call_id.into()),
         }
     }
 }

@@ -21,6 +21,8 @@ const PAIR_LOCKOUT_SECS: u64 = 300; // 5 minutes
 /// Maximum number of tracked client entries to bound memory usage.
 const MAX_TRACKED_CLIENTS: usize = 1024;
 
+type FailedAttemptMap = HashMap<String, (u32, Option<Instant>)>;
+
 /// Manages pairing state for the gateway.
 ///
 /// Bearer tokens are stored as SHA-256 hashes to prevent plaintext exposure
@@ -36,7 +38,7 @@ pub struct PairingGuard {
     /// Set of SHA-256 hashed bearer tokens (persisted across restarts).
     paired_tokens: Arc<Mutex<HashSet<String>>>,
     /// Brute-force protection: per-client failed attempt counter + lockout time.
-    failed_attempts: Arc<Mutex<HashMap<String, (u32, Option<Instant>)>>>,
+    failed_attempts: Arc<Mutex<FailedAttemptMap>>,
 }
 
 impl PairingGuard {
@@ -250,7 +252,7 @@ pub fn constant_time_eq(a: &str, b: &str) -> bool {
         let y = *b.get(i).unwrap_or(&0);
         byte_diff |= x ^ y;
     }
-    (len_diff == 0) & (byte_diff == 0)
+    (len_diff == 0) && (byte_diff == 0)
 }
 
 /// Check if a host string represents a non-localhost bind address.

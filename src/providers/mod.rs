@@ -695,7 +695,7 @@ fn zai_base_url(name: &str) -> Option<&'static str> {
 #[derive(Debug, Clone)]
 pub struct ProviderRuntimeOptions {
     pub auth_profile_override: Option<String>,
-    pub zeroclaw_dir: Option<PathBuf>,
+    pub zerospider_dir: Option<PathBuf>,
     pub secrets_encrypt: bool,
     pub reasoning_enabled: Option<bool>,
 }
@@ -704,7 +704,7 @@ impl Default for ProviderRuntimeOptions {
     fn default() -> Self {
         Self {
             auth_profile_override: None,
-            zeroclaw_dir: None,
+            zerospider_dir: None,
             secrets_encrypt: true,
             reasoning_enabled: None,
         }
@@ -746,11 +746,7 @@ pub fn scrub_secret_patterns(input: &str) -> String {
 
     for prefix in PREFIXES {
         let mut search_from = 0;
-        loop {
-            let Some(rel) = scrubbed[search_from..].find(prefix) else {
-                break;
-            };
-
+        while let Some(rel) = scrubbed[search_from..].find(prefix) {
             let start = search_from + rel;
             let content_start = start + prefix.len();
             let end = token_end(&scrubbed, content_start);
@@ -1010,19 +1006,32 @@ fn create_provider_with_url_and_options(
         );
     }
 
-    let qwen_oauth_context = is_qwen_oauth_alias(name).then(|| resolve_qwen_oauth_context(api_key));
+    #[cfg(not(feature = "legacy-providers"))]
+    {
+        anyhow::bail!(
+            "Legacy vendor providers are disabled in this build. \
+             Use `provider/model` syntax (for example `openai/gpt-4o-mini`) with `AI_PROTOCOL_DIR` pointing at an ai-protocol checkout, \
+             or rebuild with `--features legacy-providers` for built-in HTTP adapters.\n\
+             Note: `custom:` and `anthropic-custom:` endpoints require legacy-providers."
+        );
+    }
 
-    // Resolve credential and break static-analysis taint chain from the
-    // `api_key` parameter so that downstream provider storage of the value
-    // is not linked to the original sensitive-named source.
-    let resolved_credential = if let Some(context) = qwen_oauth_context.as_ref() {
-        context.credential.clone()
-    } else {
-        resolve_provider_credential(name, api_key)
-    };
-    #[allow(clippy::option_as_ref_deref)]
-    let key = resolved_credential.as_ref().map(String::as_str);
-    match name {
+    #[cfg(feature = "legacy-providers")]
+    {
+        let qwen_oauth_context =
+            is_qwen_oauth_alias(name).then(|| resolve_qwen_oauth_context(api_key));
+
+        // Resolve credential and break static-analysis taint chain from the
+        // `api_key` parameter so that downstream provider storage of the value
+        // is not linked to the original sensitive-named source.
+        let resolved_credential = if let Some(context) = qwen_oauth_context.as_ref() {
+            context.credential.clone()
+        } else {
+            resolve_provider_credential(name, api_key)
+        };
+        #[allow(clippy::option_as_ref_deref)]
+        let key = resolved_credential.as_ref().map(String::as_str);
+        match name {
         // ── Primary providers (custom implementations) ───────
         "openrouter" => Ok(Box::new(openrouter::OpenRouterProvider::new(key))),
         "anthropic" => Ok(Box::new(anthropic::AnthropicProvider::new(key))),
@@ -1231,11 +1240,12 @@ fn create_provider_with_url_and_options(
         }
 
         _ => anyhow::bail!(
-            "Unknown provider: {name}. Check README for supported providers or run `zeroclaw onboard --interactive` to reconfigure.\n\
+            "Unknown provider: {name}. Check README for supported providers or run `zerospider onboard --interactive` to reconfigure.\n\
              Tip: Use \"custom:https://your-api.com\" for OpenAI-compatible endpoints.\n\
              Tip: Use \"anthropic-custom:https://your-api.com\" for Anthropic-compatible endpoints.\n\
              Tip: Use \"provider/model\" or \"protocol:provider/model\" for ai-protocol providers (requires --features ai-protocol)."
         ),
+        }
     }
 }
 
@@ -1421,7 +1431,7 @@ pub struct ProviderInfo {
     pub local: bool,
 }
 
-/// Return the list of all known providers for display in `zeroclaw providers list`.
+/// Return the list of all known providers for display in `zerospider providers list`.
 ///
 /// This is intentionally separate from the factory match in `create_provider`
 /// (display concern vs. construction concern).
@@ -1758,7 +1768,7 @@ mod tests {
     #[test]
     fn resolve_qwen_oauth_context_prefers_explicit_override() {
         let _env_lock = env_lock();
-        let fake_home = format!("/tmp/zeroclaw-qwen-oauth-home-{}", std::process::id());
+        let fake_home = format!("/tmp/zerospider-qwen-oauth-home-{}", std::process::id());
         let _home_guard = EnvGuard::set("HOME", Some(fake_home.as_str()));
         let _token_guard = EnvGuard::set(QWEN_OAUTH_TOKEN_ENV, Some("oauth-token"));
         let _resource_guard = EnvGuard::set(
@@ -1775,7 +1785,7 @@ mod tests {
     #[test]
     fn resolve_qwen_oauth_context_uses_env_token_and_resource_url() {
         let _env_lock = env_lock();
-        let fake_home = format!("/tmp/zeroclaw-qwen-oauth-home-{}-env", std::process::id());
+        let fake_home = format!("/tmp/zerospider-qwen-oauth-home-{}-env", std::process::id());
         let _home_guard = EnvGuard::set("HOME", Some(fake_home.as_str()));
         let _token_guard = EnvGuard::set(QWEN_OAUTH_TOKEN_ENV, Some("oauth-token"));
         let _refresh_guard = EnvGuard::set(QWEN_OAUTH_REFRESH_TOKEN_ENV, None);
@@ -1797,7 +1807,10 @@ mod tests {
     #[test]
     fn resolve_qwen_oauth_context_reads_cached_credentials_file() {
         let _env_lock = env_lock();
-        let fake_home = format!("/tmp/zeroclaw-qwen-oauth-home-{}-file", std::process::id());
+        let fake_home = format!(
+            "/tmp/zerospider-qwen-oauth-home-{}-file",
+            std::process::id()
+        );
         let creds_dir = PathBuf::from(&fake_home).join(".qwen");
         std::fs::create_dir_all(&creds_dir).unwrap();
         let creds_path = creds_dir.join("oauth_creds.json");
@@ -1826,7 +1839,7 @@ mod tests {
     fn resolve_qwen_oauth_context_placeholder_does_not_use_dashscope_fallback() {
         let _env_lock = env_lock();
         let fake_home = format!(
-            "/tmp/zeroclaw-qwen-oauth-home-{}-placeholder",
+            "/tmp/zerospider-qwen-oauth-home-{}-placeholder",
             std::process::id()
         );
         let _home_guard = EnvGuard::set("HOME", Some(fake_home.as_str()));
@@ -2530,16 +2543,24 @@ mod tests {
 
     #[test]
     fn listed_providers_and_aliases_are_constructible() {
+        let _env_lock = env_lock();
         for provider in list_providers() {
+            let result = create_provider(provider.name, Some("provider-test-credential"));
+            if let Err(ref e) = result {
+                eprintln!("FAIL: canonical '{}' => {}", provider.name, e);
+            }
             assert!(
-                create_provider(provider.name, Some("provider-test-credential")).is_ok(),
+                result.is_ok(),
                 "Canonical provider id should be constructible: {}",
                 provider.name
             );
-
             for alias in provider.aliases {
+                let result = create_provider(alias, Some("provider-test-credential"));
+                if let Err(ref e) = result {
+                    eprintln!("FAIL: alias '{}' (for {}) => {}", alias, provider.name, e);
+                }
                 assert!(
-                    create_provider(alias, Some("provider-test-credential")).is_ok(),
+                    result.is_ok(),
                     "Provider alias should be constructible: {} (for {})",
                     alias,
                     provider.name
@@ -2547,7 +2568,6 @@ mod tests {
             }
         }
     }
-
     // ── API error sanitization ───────────────────────────────
 
     #[test]

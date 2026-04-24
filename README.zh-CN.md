@@ -7,6 +7,8 @@
 
 [English](README.md) · [简体中文](README.zh-CN.md)
 
+[贡献指南](CONTRIBUTING.md) · [ai-lib 迁移（版本矩阵与环境）](docs/ai-lib-migration.md)
+
 ---
 
 ## 概述

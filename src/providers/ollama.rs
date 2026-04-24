@@ -939,6 +939,7 @@ mod tests {
     fn convert_messages_parses_native_assistant_tool_calls() {
         let provider = OllamaProvider::new(None, None);
         let messages = vec![ChatMessage {
+            tool_call_id: None,
             role: "assistant".into(),
             content: r#"{"content":null,"tool_calls":[{"id":"call_1","name":"shell","arguments":"{\"command\":\"ls\"}"}]}"#.into(),
         }];
@@ -963,10 +964,12 @@ mod tests {
         let provider = OllamaProvider::new(None, None);
         let messages = vec![
             ChatMessage {
+                tool_call_id: None,
                 role: "assistant".into(),
                 content: r#"{"content":null,"tool_calls":[{"id":"call_7","name":"file_read","arguments":"{\"path\":\"README.md\"}"}]}"#.into(),
             },
             ChatMessage {
+                tool_call_id: None,
                 role: "tool".into(),
                 content: r#"{"tool_call_id":"call_7","content":"ok"}"#.into(),
             },
@@ -985,6 +988,7 @@ mod tests {
     fn convert_messages_extracts_images_from_user_marker() {
         let provider = OllamaProvider::new(None, None);
         let messages = vec![ChatMessage {
+            tool_call_id: None,
             role: "user".into(),
             content: "Inspect this screenshot [IMAGE:data:image/png;base64,abcd==]".into(),
         }];

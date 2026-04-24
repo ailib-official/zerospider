@@ -319,10 +319,8 @@ fn contains_unquoted_single_ampersand(command: &str) -> bool {
                 match ch {
                     '\'' => quote = QuoteState::Single,
                     '"' => quote = QuoteState::Double,
-                    '&' => {
-                        if chars.next_if_eq(&'&').is_none() {
-                            return true;
-                        }
+                    '&' if chars.next_if_eq(&'&').is_none() => {
+                        return true;
                     }
                     _ => {}
                 }
@@ -356,7 +354,6 @@ fn contains_unquoted_char(command: &str, target: char) -> bool {
                 }
                 if ch == '"' {
                     quote = QuoteState::None;
-                    continue;
                 }
             }
             QuoteState::None => {
@@ -1533,8 +1530,13 @@ mod tests {
     #[test]
     fn checklist_root_path_blocked() {
         let p = default_policy();
-        assert!(!p.is_path_allowed("/"));
-        assert!(!p.is_path_allowed("/anything"));
+        if cfg!(windows) {
+            assert!(!p.is_path_allowed(r"C:\"));
+            assert!(!p.is_path_allowed(r"C:\anything"));
+        } else {
+            assert!(!p.is_path_allowed("/"));
+            assert!(!p.is_path_allowed("/anything"));
+        }
     }
 
     #[test]
@@ -1591,7 +1593,12 @@ mod tests {
             workspace_only: true,
             ..SecurityPolicy::default()
         };
-        assert!(!p.is_path_allowed("/any/absolute/path"));
+        let abs = if cfg!(windows) {
+            r"C:\any\absolute\path"
+        } else {
+            "/any/absolute/path"
+        };
+        assert!(!p.is_path_allowed(abs));
         assert!(p.is_path_allowed("relative/path.txt"));
     }
 
@@ -1642,7 +1649,7 @@ mod tests {
 
     #[test]
     fn resolved_path_blocks_outside_workspace() {
-        let workspace = std::env::temp_dir().join("zeroclaw_test_resolved_path");
+        let workspace = std::env::temp_dir().join("zerospider_test_resolved_path");
         let _ = std::fs::create_dir_all(&workspace);
 
         // Use the canonicalized workspace so starts_with checks match
@@ -1666,7 +1673,7 @@ mod tests {
         let canonical_temp = std::env::temp_dir()
             .canonicalize()
             .unwrap_or_else(|_| std::env::temp_dir());
-        let outside = canonical_temp.join("outside_workspace_zeroclaw");
+        let outside = canonical_temp.join("outside_workspace_zerospider");
         assert!(
             !policy.is_resolved_path_allowed(&outside),
             "path outside workspace must be blocked"
@@ -1678,7 +1685,7 @@ mod tests {
     #[test]
     fn resolved_path_blocks_root_escape() {
         let policy = SecurityPolicy {
-            workspace_dir: PathBuf::from("/home/zeroclaw_user/project"),
+            workspace_dir: PathBuf::from("/home/zerospider_user/project"),
             ..SecurityPolicy::default()
         };
 
@@ -1697,7 +1704,7 @@ mod tests {
     fn resolved_path_blocks_symlink_escape() {
         use std::os::unix::fs::symlink;
 
-        let root = std::env::temp_dir().join("zeroclaw_test_symlink_escape");
+        let root = std::env::temp_dir().join("zerospider_test_symlink_escape");
         let workspace = root.join("workspace");
         let outside = root.join("outside_target");
 

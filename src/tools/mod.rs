@@ -62,8 +62,11 @@ pub use file_read::FileReadTool;
 pub use file_write::FileWriteTool;
 pub use git_operations::GitOperationsTool;
 pub use glob_search::GlobSearchTool;
+#[cfg(feature = "hardware")]
 pub use hardware_board_info::HardwareBoardInfoTool;
+#[cfg(feature = "hardware")]
 pub use hardware_memory_map::HardwareMemoryMapTool;
+#[cfg(feature = "hardware")]
 pub use hardware_memory_read::HardwareMemoryReadTool;
 pub use http_request::HttpRequestTool;
 pub use image_info::ImageInfoTool;
@@ -296,7 +299,7 @@ pub fn all_tools_with_runtime(
             security.clone(),
             crate::providers::ProviderRuntimeOptions {
                 auth_profile_override: None,
-                zeroclaw_dir: root_config
+                zerospider_dir: root_config
                     .config_path
                     .parent()
                     .map(std::path::PathBuf::from),

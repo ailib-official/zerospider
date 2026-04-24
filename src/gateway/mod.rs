@@ -6,7 +6,8 @@
 //! - Request body size limits (64KB max)
 //! - Request timeouts (30s) to prevent slow-loris attacks
 //! - Header sanitization (handled by axum/hyper)
-//! 网关模块负责统一入口与模型调用编排。
+//!
+//! This module coordinates HTTP entry points and model dispatch for the gateway.
 
 use crate::channels::{Channel, LinqChannel, NextcloudTalkChannel, SendMessage, WhatsAppChannel};
 use crate::config::Config;
@@ -331,7 +332,7 @@ pub async fn run_gateway(host: &str, port: u16, config: Config) -> Result<()> {
         &config.reliability,
         &providers::ProviderRuntimeOptions {
             auth_profile_override: None,
-            zeroclaw_dir: config.config_path.parent().map(std::path::PathBuf::from),
+            zerospider_dir: config.config_path.parent().map(std::path::PathBuf::from),
             secrets_encrypt: config.secrets.encrypt,
             reasoning_enabled: config.runtime.reasoning_enabled,
         },
@@ -1578,7 +1579,7 @@ mod tests {
 
         let body = response.into_body().collect().await.unwrap().to_bytes();
         let text = String::from_utf8(body.to_vec()).unwrap();
-        assert!(text.contains("zeroclaw_heartbeat_ticks_total 1"));
+        assert!(text.contains("zerospider_heartbeat_ticks_total 1"));
     }
 
     #[test]

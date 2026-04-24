@@ -2,6 +2,18 @@
 //!
 //! This module contains reusable helper functions used across the codebase.
 
+use std::cmp;
+
+/// Truncate at or before `byte_idx` to the last UTF-8 character boundary (MSRV: `&str` before 1.91).
+#[must_use]
+pub fn floor_char_boundary(s: &str, byte_idx: usize) -> usize {
+    let mut i = cmp::min(byte_idx, s.len());
+    while i > 0 && !s.is_char_boundary(i) {
+        i -= 1;
+    }
+    i
+}
+
 /// Truncate a string to at most `max_chars` characters, appending "..." if truncated.
 ///
 /// This function safely handles multi-byte UTF-8 characters (emoji, CJK, accented characters)
@@ -17,7 +29,7 @@
 ///
 /// # Examples
 /// ```ignore
-/// use zeroclaw::util::truncate_with_ellipsis;
+/// use zerospider::util::truncate_with_ellipsis;
 ///
 /// // ASCII string - no truncation needed
 /// assert_eq!(truncate_with_ellipsis("hello", 10), "hello");

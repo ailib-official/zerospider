@@ -1,13 +1,29 @@
-# Contributing to ZeroClaw
+# Contributing to ZeroSpider
 
-Thanks for your interest in contributing to ZeroClaw! This guide will help you get started.
+Thanks for your interest in contributing. This guide will help you get started. Some later sections still reference the upstream “ZeroClaw” naming in paths and examples; the **ai-protocol** / **ai-lib** workflow is documented here and in `docs/ai-lib-migration.md`.
+
+## ZeroSpider: ai-protocol checkout and `AI_PROTOCOL_DIR`
+
+Provider manifests and JSON Schema come from the [ai-protocol](https://github.com/ailib-official/ai-protocol) repository. For any build or test that resolves models through the protocol provider graph, you need a local clone and `AI_PROTOCOL_DIR` pointing at its root (the directory that contains the manifest tree / schema the project expects).
+
+```bash
+# Example layout (sibling checkouts; paths are up to you)
+git clone https://github.com/ailib-official/ai-protocol.git
+export AI_PROTOCOL_DIR="/absolute/path/to/ai-protocol"
+
+# Recommended checks once env is set (see `docs/ai-lib-migration.md` for the version matrix)
+cargo check --features ai-protocol
+cargo test --features ai-protocol
+```
+
+If you do not set `AI_PROTOCOL_DIR`, follow the same migration doc for the supported fallback behavior and CI expectations. Prefer **`AI_PROTOCOL_DIR`** for ZeroSpider documentation consistency (some tools also accept `AI_PROTOCOL_PATH` as an alias).
 
 ## Development Setup
 
 ```bash
 # Clone the repo
-git clone https://github.com/zeroclaw-labs/zeroclaw.git
-cd zeroclaw
+git clone https://github.com/ailib-official/zerospider.git
+cd zerospider
 
 # Enable the pre-push hook (runs fmt, clippy, tests before every push)
 git config core.hooksPath .githooks

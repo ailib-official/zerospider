@@ -198,7 +198,7 @@ impl RemoteDeployer {
 
         for step in steps {
             match self.execute_step(&target, &step).await {
-                Ok(_) => {
+                Ok(()) => {
                     tracing::info!(step = %step.name, target = %target_id, "Step completed");
                 }
                 Err(e) => {

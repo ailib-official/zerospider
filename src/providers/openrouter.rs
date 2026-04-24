@@ -249,7 +249,7 @@ impl Provider for OpenRouterProvider {
         temperature: f64,
     ) -> anyhow::Result<String> {
         let credential = self.credential.as_ref()
-            .ok_or_else(|| anyhow::anyhow!("OpenRouter API key not set. Run `zeroclaw onboard` or set OPENROUTER_API_KEY env var."))?;
+            .ok_or_else(|| anyhow::anyhow!("OpenRouter API key not set. Run `zerospider onboard` or set OPENROUTER_API_KEY env var."))?;
 
         let mut messages = Vec::new();
 
@@ -277,7 +277,7 @@ impl Provider for OpenRouterProvider {
             .header("Authorization", format!("Bearer {credential}"))
             .header(
                 "HTTP-Referer",
-                "https://github.com/theonlyhennygod/zeroclaw",
+                "https://github.com/theonlyhennygod/zerospider",
             )
             .header("X-Title", "ZeroClaw")
             .json(&request)
@@ -305,7 +305,7 @@ impl Provider for OpenRouterProvider {
         temperature: f64,
     ) -> anyhow::Result<String> {
         let credential = self.credential.as_ref()
-            .ok_or_else(|| anyhow::anyhow!("OpenRouter API key not set. Run `zeroclaw onboard` or set OPENROUTER_API_KEY env var."))?;
+            .ok_or_else(|| anyhow::anyhow!("OpenRouter API key not set. Run `zerospider onboard` or set OPENROUTER_API_KEY env var."))?;
 
         let api_messages: Vec<Message> = messages
             .iter()
@@ -327,7 +327,7 @@ impl Provider for OpenRouterProvider {
             .header("Authorization", format!("Bearer {credential}"))
             .header(
                 "HTTP-Referer",
-                "https://github.com/theonlyhennygod/zeroclaw",
+                "https://github.com/theonlyhennygod/zerospider",
             )
             .header("X-Title", "ZeroClaw")
             .json(&request)
@@ -356,7 +356,7 @@ impl Provider for OpenRouterProvider {
     ) -> anyhow::Result<ProviderChatResponse> {
         let credential = self.credential.as_ref().ok_or_else(|| {
             anyhow::anyhow!(
-            "OpenRouter API key not set. Run `zeroclaw onboard` or set OPENROUTER_API_KEY env var."
+            "OpenRouter API key not set. Run `zerospider onboard` or set OPENROUTER_API_KEY env var."
         )
         })?;
 
@@ -375,7 +375,7 @@ impl Provider for OpenRouterProvider {
             .header("Authorization", format!("Bearer {credential}"))
             .header(
                 "HTTP-Referer",
-                "https://github.com/theonlyhennygod/zeroclaw",
+                "https://github.com/theonlyhennygod/zerospider",
             )
             .header("X-Title", "ZeroClaw")
             .json(&native_request)
@@ -409,7 +409,7 @@ impl Provider for OpenRouterProvider {
     ) -> anyhow::Result<ProviderChatResponse> {
         let credential = self.credential.as_ref().ok_or_else(|| {
             anyhow::anyhow!(
-                "OpenRouter API key not set. Run `zeroclaw onboard` or set OPENROUTER_API_KEY env var."
+                "OpenRouter API key not set. Run `zerospider onboard` or set OPENROUTER_API_KEY env var."
             )
         })?;
 
@@ -463,7 +463,7 @@ impl Provider for OpenRouterProvider {
             .header("Authorization", format!("Bearer {credential}"))
             .header(
                 "HTTP-Referer",
-                "https://github.com/theonlyhennygod/zeroclaw",
+                "https://github.com/theonlyhennygod/zerospider",
             )
             .header("X-Title", "ZeroClaw")
             .json(&native_request)
@@ -528,10 +528,12 @@ mod tests {
         let provider = OpenRouterProvider::new(None);
         let messages = vec![
             ChatMessage {
+                tool_call_id: None,
                 role: "system".into(),
                 content: "be concise".into(),
             },
             ChatMessage {
+                tool_call_id: None,
                 role: "user".into(),
                 content: "hello".into(),
             },
@@ -574,10 +576,12 @@ mod tests {
     fn chat_request_serializes_history_messages() {
         let messages = [
             ChatMessage {
+                tool_call_id: None,
                 role: "assistant".into(),
                 content: "Previous answer".into(),
             },
             ChatMessage {
+                tool_call_id: None,
                 role: "user".into(),
                 content: "Follow-up".into(),
             },
@@ -624,6 +628,7 @@ mod tests {
     async fn chat_with_tools_fails_without_key() {
         let provider = OpenRouterProvider::new(None);
         let messages = vec![ChatMessage {
+            tool_call_id: None,
             role: "user".into(),
             content: "What is the date?".into(),
         }];
@@ -717,6 +722,7 @@ mod tests {
     #[test]
     fn convert_messages_parses_assistant_tool_call_payload() {
         let messages = vec![ChatMessage {
+            tool_call_id: None,
             role: "assistant".into(),
             content: r#"{"content":"Using tool","tool_calls":[{"id":"call_abc","name":"shell","arguments":"{\"command\":\"pwd\"}"}]}"#
                 .into(),
@@ -737,6 +743,7 @@ mod tests {
     #[test]
     fn convert_messages_parses_tool_result_payload() {
         let messages = vec![ChatMessage {
+            tool_call_id: None,
             role: "tool".into(),
             content: r#"{"tool_call_id":"call_xyz","content":"done"}"#.into(),
         }];

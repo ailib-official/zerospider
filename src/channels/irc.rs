@@ -436,47 +436,46 @@ impl Channel for IrcChannel {
 
                 // CAP responses for SASL
                 "CAP" => {
-                    if sasl_pending && msg.params.iter().any(|p| p.contains("sasl")) {
-                        if msg.params.iter().any(|p| p.contains("ACK")) {
-                            // CAP * ACK :sasl — server accepted, start SASL auth
-                            let mut guard = self.writer.lock().await;
-                            if let Some(ref mut w) = *guard {
-                                Self::send_raw(w, "AUTHENTICATE PLAIN").await?;
-                            }
-                        } else if msg.params.iter().any(|p| p.contains("NAK")) {
-                            // CAP * NAK :sasl — server rejected SASL, proceed without it
-                            tracing::warn!(
-                                "IRC server does not support SASL, continuing without it"
-                            );
-                            sasl_pending = false;
-                            let mut guard = self.writer.lock().await;
-                            if let Some(ref mut w) = *guard {
-                                Self::send_raw(w, "CAP END").await?;
-                            }
+                    if sasl_pending
+                        && msg.params.iter().any(|p| p.contains("sasl"))
+                        && msg.params.iter().any(|p| p.contains("ACK"))
+                    {
+                        // CAP * ACK :sasl — server accepted, start SASL auth
+                        let mut guard = self.writer.lock().await;
+                        if let Some(ref mut w) = *guard {
+                            Self::send_raw(w, "AUTHENTICATE PLAIN").await?;
+                        }
+                    } else if sasl_pending
+                        && msg.params.iter().any(|p| p.contains("sasl"))
+                        && msg.params.iter().any(|p| p.contains("NAK"))
+                    {
+                        // CAP * NAK :sasl — server rejected SASL, proceed without it
+                        tracing::warn!("IRC server does not support SASL, continuing without it");
+                        sasl_pending = false;
+                        let mut guard = self.writer.lock().await;
+                        if let Some(ref mut w) = *guard {
+                            Self::send_raw(w, "CAP END").await?;
                         }
                     }
                 }
 
-                "AUTHENTICATE" => {
-                    // Server sends "AUTHENTICATE +" to request credentials
-                    if sasl_pending && msg.params.first().is_some_and(|p| p == "+") {
-                        // sasl_password is loaded from runtime config, not hard-coded
-                        if let Some(password) = self.sasl_password.as_deref() {
-                            let encoded = encode_sasl_plain(&current_nick, password);
-                            let mut guard = self.writer.lock().await;
-                            if let Some(ref mut w) = *guard {
-                                Self::send_raw(w, &format!("AUTHENTICATE {encoded}")).await?;
-                            }
-                        } else {
-                            // SASL was requested but no password is configured; abort SASL
-                            tracing::warn!(
-                                "SASL authentication requested but no SASL password is configured; aborting SASL"
-                            );
-                            sasl_pending = false;
-                            let mut guard = self.writer.lock().await;
-                            if let Some(ref mut w) = *guard {
-                                Self::send_raw(w, "CAP END").await?;
-                            }
+                "AUTHENTICATE" if sasl_pending && msg.params.first().is_some_and(|p| p == "+") => {
+                    // sasl_password is loaded from runtime config, not hard-coded
+                    if let Some(password) = self.sasl_password.as_deref() {
+                        let encoded = encode_sasl_plain(&current_nick, password);
+                        let mut guard = self.writer.lock().await;
+                        if let Some(ref mut w) = *guard {
+                            Self::send_raw(w, &format!("AUTHENTICATE {encoded}")).await?;
+                        }
+                    } else {
+                        // SASL was requested but no password is configured; abort SASL
+                        tracing::warn!(
+                            "SASL authentication requested but no SASL password is configured; aborting SASL"
+                        );
+                        sasl_pending = false;
+                        let mut guard = self.writer.lock().await;
+                        if let Some(ref mut w) = *guard {
+                            Self::send_raw(w, "CAP END").await?;
                         }
                     }
                 }
@@ -919,7 +918,7 @@ mod tests {
             server: "irc.example.com".into(),
             port: 6697,
             nickname: "zcbot".into(),
-            username: Some("zeroclaw".into()),
+            username: Some("zerospider".into()),
             channels: vec!["#test".into()],
             allowed_users: vec!["alice".into()],
             server_password: Some("serverpass".into()),
@@ -930,7 +929,7 @@ mod tests {
         assert_eq!(ch.server, "irc.example.com");
         assert_eq!(ch.port, 6697);
         assert_eq!(ch.nickname, "zcbot");
-        assert_eq!(ch.username, "zeroclaw");
+        assert_eq!(ch.username, "zerospider");
         assert_eq!(ch.channels, vec!["#test"]);
         assert_eq!(ch.allowed_users, vec!["alice"]);
         assert_eq!(ch.server_password.as_deref(), Some("serverpass"));
@@ -949,7 +948,7 @@ mod tests {
             server: "irc.example.com".into(),
             port: 6697,
             nickname: "zcbot".into(),
-            username: Some("zeroclaw".into()),
+            username: Some("zerospider".into()),
             channels: vec!["#test".into(), "#dev".into()],
             allowed_users: vec!["alice".into()],
             server_password: None,
@@ -963,7 +962,7 @@ mod tests {
         assert_eq!(parsed.server, "irc.example.com");
         assert_eq!(parsed.port, 6697);
         assert_eq!(parsed.nickname, "zcbot");
-        assert_eq!(parsed.username.as_deref(), Some("zeroclaw"));
+        assert_eq!(parsed.username.as_deref(), Some("zerospider"));
         assert_eq!(parsed.channels, vec!["#test", "#dev"]);
         assert_eq!(parsed.allowed_users, vec!["alice"]);
         assert!(parsed.server_password.is_none());
@@ -1010,7 +1009,7 @@ nickname = "bot"
             port: 6697,
             nickname: "zcbot".into(),
             username: None,
-            channels: vec!["#zeroclaw".into()],
+            channels: vec!["#zerospider".into()],
             allowed_users: vec!["*".into()],
             server_password: None,
             nickserv_password: None,

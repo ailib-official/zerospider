@@ -505,7 +505,6 @@ impl BedrockProvider {
                         let after_semi = &rest[semi + 1..];
                         if let Some(b64) = after_semi.strip_prefix("base64,") {
                             let format = match mime {
-                                "image/jpeg" | "image/jpg" => "jpeg",
                                 "image/png" => "png",
                                 "image/gif" => "gif",
                                 "image/webp" => "webp",
@@ -1193,6 +1192,7 @@ mod tests {
         let mut messages = vec![ChatMessage::system("System")];
         for i in 0..5 {
             messages.push(ChatMessage {
+                tool_call_id: None,
                 role: if i % 2 == 0 { "user" } else { "assistant" }.to_string(),
                 content: format!("Message {i}"),
             });

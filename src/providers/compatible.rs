@@ -634,8 +634,7 @@ fn first_nonempty(text: Option<&str>) -> Option<String> {
 
 fn normalize_responses_role(role: &str) -> &'static str {
     match role {
-        "assistant" => "assistant",
-        "tool" => "assistant",
+        "assistant" | "tool" => "assistant",
         _ => "user",
     }
 }
@@ -990,7 +989,7 @@ impl Provider for OpenAiCompatibleProvider {
     ) -> anyhow::Result<String> {
         let credential = self.credential.as_ref().ok_or_else(|| {
             anyhow::anyhow!(
-                "{} API key not set. Run `zeroclaw onboard` or set the appropriate env var.",
+                "{} API key not set. Run `zerospider onboard` or set the appropriate env var.",
                 self.name
             )
         })?;
@@ -1119,7 +1118,7 @@ impl Provider for OpenAiCompatibleProvider {
     ) -> anyhow::Result<String> {
         let credential = self.credential.as_ref().ok_or_else(|| {
             anyhow::anyhow!(
-                "{} API key not set. Run `zeroclaw onboard` or set the appropriate env var.",
+                "{} API key not set. Run `zerospider onboard` or set the appropriate env var.",
                 self.name
             )
         })?;
@@ -1225,7 +1224,7 @@ impl Provider for OpenAiCompatibleProvider {
     ) -> anyhow::Result<ProviderChatResponse> {
         let credential = self.credential.as_ref().ok_or_else(|| {
             anyhow::anyhow!(
-                "{} API key not set. Run `zeroclaw onboard` or set the appropriate env var.",
+                "{} API key not set. Run `zerospider onboard` or set the appropriate env var.",
                 self.name
             )
         })?;
@@ -1321,7 +1320,7 @@ impl Provider for OpenAiCompatibleProvider {
     ) -> anyhow::Result<ProviderChatResponse> {
         let credential = self.credential.as_ref().ok_or_else(|| {
             anyhow::anyhow!(
-                "{} API key not set. Run `zeroclaw onboard` or set the appropriate env var.",
+                "{} API key not set. Run `zerospider onboard` or set the appropriate env var.",
                 self.name
             )
         })?;
@@ -2302,6 +2301,7 @@ mod tests {
     async fn chat_with_tools_fails_without_key() {
         let p = make_provider("TestProvider", "https://example.com", None);
         let messages = vec![ChatMessage {
+            tool_call_id: None,
             role: "user".to_string(),
             content: "hello".to_string(),
         }];

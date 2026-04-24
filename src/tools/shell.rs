@@ -127,11 +127,13 @@ impl Tool for ShellTool {
 
                 // Truncate output to prevent OOM
                 if stdout.len() > MAX_OUTPUT_BYTES {
-                    stdout.truncate(stdout.floor_char_boundary(MAX_OUTPUT_BYTES));
+                    let n = crate::util::floor_char_boundary(&stdout, MAX_OUTPUT_BYTES);
+                    stdout.truncate(n);
                     stdout.push_str("\n... [output truncated at 1MB]");
                 }
                 if stderr.len() > MAX_OUTPUT_BYTES {
-                    stderr.truncate(stderr.floor_char_boundary(MAX_OUTPUT_BYTES));
+                    let n = crate::util::floor_char_boundary(&stderr, MAX_OUTPUT_BYTES);
+                    stderr.truncate(n);
                     stderr.push_str("\n... [stderr truncated at 1MB]");
                 }
 
@@ -204,6 +206,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(unix)]
     async fn shell_executes_allowed_command() {
         let tool = ShellTool::new(test_security(AutonomyLevel::Supervised), test_runtime());
         let result = tool
@@ -216,6 +219,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(unix)]
     async fn shell_blocks_disallowed_command() {
         let tool = ShellTool::new(test_security(AutonomyLevel::Supervised), test_runtime());
         let result = tool
@@ -228,6 +232,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(unix)]
     async fn shell_blocks_readonly() {
         let tool = ShellTool::new(test_security(AutonomyLevel::ReadOnly), test_runtime());
         let result = tool
@@ -258,6 +263,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(unix)]
     async fn shell_captures_exit_code() {
         let tool = ShellTool::new(test_security(AutonomyLevel::Supervised), test_runtime());
         let result = tool
@@ -301,6 +307,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
+    #[cfg(unix)]
     async fn shell_does_not_leak_api_key() {
         let _g1 = EnvGuard::set("API_KEY", "sk-test-secret-12345");
         let _g2 = EnvGuard::set("ZEROCLAW_API_KEY", "sk-test-secret-67890");
@@ -322,6 +329,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(unix)]
     async fn shell_preserves_path_and_home() {
         let tool = ShellTool::new(test_security_with_env_cmd(), test_runtime());
 
@@ -347,6 +355,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(unix)]
     async fn shell_requires_approval_for_medium_risk_command() {
         let security = Arc::new(SecurityPolicy {
             autonomy: AutonomyLevel::Supervised,
@@ -357,7 +366,7 @@ mod tests {
 
         let tool = ShellTool::new(security.clone(), test_runtime());
         let denied = tool
-            .execute(json!({"command": "touch zeroclaw_shell_approval_test"}))
+            .execute(json!({"command": "touch zerospider_shell_approval_test"}))
             .await
             .expect("unapproved command should return a result");
         assert!(!denied.success);
@@ -369,15 +378,15 @@ mod tests {
 
         let allowed = tool
             .execute(json!({
-                "command": "touch zeroclaw_shell_approval_test",
+                "command": "touch zerospider_shell_approval_test",
                 "approved": true
             }))
             .await
             .expect("approved command execution should succeed");
         assert!(allowed.success);
 
-        let _ =
-            tokio::fs::remove_file(std::env::temp_dir().join("zeroclaw_shell_approval_test")).await;
+        let _ = tokio::fs::remove_file(std::env::temp_dir().join("zerospider_shell_approval_test"))
+            .await;
     }
 
     // ── §5.2 Shell timeout enforcement tests ─────────────────
@@ -425,6 +434,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(unix)]
     async fn shell_blocks_rate_limited() {
         let security = Arc::new(SecurityPolicy {
             autonomy: AutonomyLevel::Supervised,

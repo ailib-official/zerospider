@@ -16,6 +16,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
+use std::fmt::Write as _;
 use std::sync::Arc;
 
 const COMPOSIO_API_BASE_V2: &str = "https://backend.composio.dev/api/v2";
@@ -789,9 +790,10 @@ impl Tool for ComposioTool {
                             if let Some(app_name) = app {
                                 self.cache_connected_account(app_name, entity_id, connected_account_id);
                             }
-                            output.push_str(&format!(
+                            let _ = writeln!(
+                                output,
                                 "\nConnected account ID: {connected_account_id}"
-                            ));
+                            );
                         }
                         Ok(ToolResult {
                             success: true,
@@ -1573,7 +1575,7 @@ mod tests {
     fn resolve_picks_first_usable_when_multiple_accounts_exist() {
         // Regression test for issue #959: previously returned None when
         // multiple accounts existed, causing the LLM to loop on the OAuth URL.
-        let tool = ComposioTool::new("test-key", None, test_security());
+        let _tool = ComposioTool::new("test-key", None, test_security());
         let accounts = vec![
             ComposioConnectedAccount {
                 id: "ca_old".to_string(),
