@@ -59,6 +59,31 @@ zerospider models protocol-models
 zerospider models protocol-providers --json
 ```
 
+## Config: logical provider / model ids (Phase 2)
+
+Manifest-backed chat uses the same **string shape** everywhere: `default_provider` is `manifest_provider_id/logical_model_id` (examples: `openai/gpt-4o-mini`, `anthropic/claude-3-5-sonnet-20241022`). Keys under `[reliability]` use the same grammar: `fallback_providers` lists alternate **provider ids** or full `provider/model` strings; `model_fallbacks` maps a primary **model id** string to an ordered list of fallback model ids (logical names from manifests).
+
+Set API keys the way your manifests expect (e.g. `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or placeholders documented in ai-protocol). `AI_PROTOCOL_DIR` must point at the checkout whose YAML defines those provider/model entries.
+
+**Minimal `config.toml` excerpt (copy-paste — adjust paths and keys):**
+
+```toml
+# Logical default: protocol provider + model (requires AI_PROTOCOL_DIR + credentials)
+default_provider = "openai/gpt-4o-mini"
+default_model = "gpt-4o-mini"
+
+[reliability]
+# After retries, try another logical route (same string grammar as default_provider)
+fallback_providers = [
+  "anthropic/claude-3-5-sonnet-20241022",
+  "openai/gpt-4o",
+]
+
+# When this primary model errors, try these alternatives in order
+[reliability.model_fallbacks]
+"gpt-4o" = ["openai/gpt-4o-mini", "anthropic/claude-3-5-sonnet-20241022"]
+```
+
 ## Resilience boundaries (Phase 4)
 
 ZeroSpider layers **two** independent mechanisms; keep them from overlapping in confusing ways:

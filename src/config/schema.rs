@@ -4164,6 +4164,43 @@ default_temperature = 0.7
         assert_eq!(parsed.memory.conversation_retention_days, 30);
     }
 
+    /// Protocol / manifest logical ids in `default_provider` and `[reliability]` (ZS-ML-003).
+    #[test]
+    async fn config_toml_accepts_protocol_logical_ids_in_provider_and_reliability() {
+        let raw = r#"
+workspace_dir = "/tmp/ws"
+config_path = "/tmp/config.toml"
+default_temperature = 0.7
+default_provider = "openai/gpt-4o-mini"
+default_model = "gpt-4o-mini"
+
+[reliability]
+fallback_providers = ["anthropic/claude-3-5-sonnet-20241022", "openai/gpt-4o"]
+
+[reliability.model_fallbacks]
+"gpt-4o" = ["openai/gpt-4o-mini", "anthropic/claude-3-5-sonnet-20241022"]
+"#;
+
+        let parsed: Config = toml::from_str(raw).unwrap();
+        assert_eq!(
+            parsed.default_provider.as_deref(),
+            Some("openai/gpt-4o-mini")
+        );
+        assert_eq!(parsed.default_model.as_deref(), Some("gpt-4o-mini"));
+        assert_eq!(parsed.reliability.fallback_providers.len(), 2);
+        assert_eq!(
+            parsed.reliability.fallback_providers[0],
+            "anthropic/claude-3-5-sonnet-20241022"
+        );
+        let alts = parsed
+            .reliability
+            .model_fallbacks
+            .get("gpt-4o")
+            .expect("model_fallbacks key");
+        assert_eq!(alts.len(), 2);
+        assert_eq!(&alts[0], "openai/gpt-4o-mini");
+    }
+
     #[test]
     async fn storage_provider_dburl_alias_deserializes() {
         let raw = r#"
