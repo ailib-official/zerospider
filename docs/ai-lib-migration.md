@@ -48,6 +48,7 @@ Feature flags:
 
 - **`ai-protocol`** — enables optional `ai-lib-rust`, `protocol_registry`, and protocol CLI. **On by default.**
 - **`legacy-providers`** — built-in vendor adapters (`openrouter`, `anthropic`, `custom:`, …). **Off by default**; pass `--features legacy-providers` when you need the old string-key factory or to run `tests/provider_resolution.rs`.
+- **`routing_mvp`** — forwards `ai-lib-rust`’s experimental routing feature (optional). **Off by default.** Enable with `--features "ai-protocol routing_mvp"` when you need that code path; CI runs `cargo check -p zerospider --features "ai-protocol routing_mvp" --lib` to prevent bitrot. **Metrics:** if `AiClient` exposes a metrics API in a future `ai-lib-rust` release, wire it to your observability layer without duplicating transport retry counters already covered here vs `[reliability]`.
 
 ## CLI: manifest introspection
 

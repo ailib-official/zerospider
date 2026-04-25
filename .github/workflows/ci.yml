@@ -33,6 +33,9 @@ jobs:
       - name: cargo check (ai-protocol feature)
         run: cargo check --workspace --features ai-protocol
 
+      - name: cargo check (ai-protocol + routing_mvp — compile gate)
+        run: cargo check -p zerospider --features "ai-protocol routing_mvp" --lib
+
       - name: cargo test (ai-protocol feature)
         run: cargo test --workspace --features ai-protocol
 

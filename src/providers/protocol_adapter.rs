@@ -100,6 +100,12 @@ impl ProtocolBackedProvider {
     }
 
     /// Run a chat execute with retry on retryable errors.
+    ///
+    /// **Boundary (migration plan Phase 4–5):** this is **transport-level** retry only
+    /// (`Error::is_retryable` / `retry_after` inside the ai-lib stack). It does **not**
+    /// replace `[reliability]` fallback chains or per-config `ReliableProvider` switching;
+    /// those stay in the app layer. Optional `ai-lib-rust` `routing_mvp` affects client
+    /// construction upstream; we do not duplicate routing policy here.
     async fn execute_chat_with_retry(
         client: &ai_lib_rust::AiClient,
         logical_model: &str,
