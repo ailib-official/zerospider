@@ -72,6 +72,8 @@ mod memory;
 mod migration;
 mod multimodal;
 mod observability;
+#[cfg(feature = "ai-protocol")]
+mod protocol_registry;
 mod onboard;
 mod peripherals;
 mod providers;

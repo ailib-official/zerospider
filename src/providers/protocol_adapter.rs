@@ -41,9 +41,18 @@ pub struct ProtocolBackedProvider {
 
 /// Build an [`ai_lib_rust::AiClient`] for a logical model id (`provider/model`).
 pub async fn resolve_ai_client(model_id: &str) -> anyhow::Result<ai_lib_rust::AiClient> {
-    ai_lib_rust::AiClient::new(model_id)
-        .await
-        .map_err(|e| anyhow::anyhow!("AiClient::new({model_id}): {e}"))
+    ai_lib_rust::AiClient::new(model_id).await.map_err(|e| {
+        let base = format!("AiClient::new({model_id}): {e}");
+        if model_id.contains('/') {
+            anyhow::anyhow!(
+                "{base}\n\
+                 Hint: logical `provider/model` ids need a local ai-protocol checkout — set `AI_PROTOCOL_DIR` \
+                 to the repository root (a directory on disk, not a URL). See `docs/migration-legacy-to-protocol.md`."
+            )
+        } else {
+            anyhow::anyhow!(base)
+        }
+    })
 }
 
 impl ProtocolBackedProvider {
@@ -60,7 +69,14 @@ impl ProtocolBackedProvider {
                 let rt = tokio::runtime::Runtime::new()?;
                 rt.block_on(async { ai_lib_rust::AiClient::new(&model).await })
             })
-            .map_err(|e| anyhow::anyhow!("Failed to build client for {}: {}", model, e))?;
+            .map_err(|e| {
+                let base = format!("Failed to build client for {model}: {e}");
+                anyhow::anyhow!(
+                    "{base}\n\
+                     Hint: set `AI_PROTOCOL_DIR` to a local ai-protocol checkout when using `provider/model` ids. \
+See `docs/migration-legacy-to-protocol.md`."
+                )
+            })?;
 
         Ok(Self {
             client: Arc::new(client),

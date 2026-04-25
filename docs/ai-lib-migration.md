@@ -2,6 +2,18 @@
 
 English summary + 中文：本页固定 **版本矩阵** 与本地开发方式，对应 `ZEROSPIDER_AI_LIB_MIGRATION_PLAN.md` Phase 0。
 
+**User-facing migration** from built-in HTTP shorthands to `provider/model` + `AI_PROTOCOL_DIR`: see **`docs/migration-legacy-to-protocol.md`**.
+
+## Compatibility window (Phase 6)
+
+ZeroSpider is **pre-1.0**; treat minors as potentially breaking until 1.0.
+
+| Area | Policy |
+|------|--------|
+| `ai-lib-rust` (crates.io) | Pin **0.9.4+** within the same minor; run `cargo test --features ai-protocol` after any bump. |
+| `ai-protocol` (Git) | Pin a **tag or commit** for reproducible QA; document the pin in your team runbook. Between tags, expect manifest schema drift — re-run protocol smoke tests when moving pins. |
+| ZeroSpider releases | Until 1.0, follow `CHANGELOG.md` [Unreleased] and semver notes for `legacy-providers` / `ai-protocol` changes. |
+
 ## Version matrix (pin for reproducible builds)
 
 | Component | Recommended | Notes |
@@ -101,4 +113,5 @@ ZeroSpider layers **two** independent mechanisms; keep them from overlapping in 
 
 ## Next steps
 
-See `active/projects/zerospider/ZEROSPIDER_AI_LIB_MIGRATION_PLAN.md` in **ai-lib-plans** for phased PRs (Phase 1 = dependency bump + adapter alignment, etc.).
+- `docs/migration-legacy-to-protocol.md` — legacy shorthands, `AI_PROTOCOL_DIR`, and build/test matrix.
+- `active/projects/zerospider/ZEROSPIDER_AI_LIB_MIGRATION_PLAN.md` in **ai-lib-plans** for phased PRs.
