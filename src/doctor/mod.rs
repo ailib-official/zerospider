@@ -815,6 +815,7 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn provider_validation_checks_custom_url_shape() {
         assert!(provider_validation_error("openrouter").is_none());
@@ -914,6 +915,7 @@ mod tests {
         assert_eq!(prov_item.unwrap().severity, Severity::Error);
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn config_validation_accepts_custom_provider() {
         let mut config = Config::default();

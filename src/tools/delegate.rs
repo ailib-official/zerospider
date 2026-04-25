@@ -669,7 +669,8 @@ mod tests {
 
     fn agentic_config(allowed_tools: Vec<String>, max_iterations: usize) -> DelegateAgentConfig {
         DelegateAgentConfig {
-            provider: "openrouter".to_string(),
+            // Resolves without `legacy-providers` (codex is handled before the legacy match arm).
+            provider: "openai-codex".to_string(),
             model: "model-test".to_string(),
             system_prompt: Some("You are agentic.".to_string()),
             api_key: Some("delegate-test-credential".to_string()),
@@ -1023,7 +1024,7 @@ mod tests {
             .unwrap();
 
         assert!(result.success);
-        assert!(result.output.contains("(openrouter/model-test, agentic)"));
+        assert!(result.output.contains("(openai-codex/model-test, agentic)"));
         assert!(result.output.contains("done"));
     }
 

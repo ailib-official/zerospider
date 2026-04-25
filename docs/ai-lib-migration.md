@@ -37,14 +37,17 @@ Use only for local debugging; do not commit `[patch.crates-io]` unless the team 
 cargo check --features ai-protocol
 cargo test --features ai-protocol
 
-# Manifest-only (no built-in vendor HTTP adapters)
+# Manifest-only (same as default features today: `ai-protocol` only)
 cargo test -p zerospider --no-default-features --features ai-protocol
+
+# Full legacy HTTP factory + integration tests (optional; also used in CI)
+cargo test -p zerospider --features "ai-protocol legacy-providers"
 ```
 
 Feature flags:
 
-- **`ai-protocol`** — enables optional `ai-lib-rust`, `protocol_registry`, and protocol CLI.
-- **`legacy-providers`** — built-in vendor adapters (`openrouter`, `anthropic`, `custom:`, …). Omit via `--no-default-features` when you only use `provider/model` + `AI_PROTOCOL_DIR`.
+- **`ai-protocol`** — enables optional `ai-lib-rust`, `protocol_registry`, and protocol CLI. **On by default.**
+- **`legacy-providers`** — built-in vendor adapters (`openrouter`, `anthropic`, `custom:`, …). **Off by default**; pass `--features legacy-providers` when you need the old string-key factory or to run `tests/provider_resolution.rs`.
 
 ## CLI: manifest introspection
 

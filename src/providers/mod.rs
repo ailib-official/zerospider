@@ -40,6 +40,7 @@ pub use traits::{
     ToolCall, ToolResultMessage,
 };
 
+#[cfg(feature = "legacy-providers")]
 use compatible::{AuthStyle, OpenAiCompatibleProvider};
 use reliable::ReliableProvider;
 use serde::Deserialize;
@@ -1008,6 +1009,8 @@ fn create_provider_with_url_and_options(
 
     #[cfg(not(feature = "legacy-providers"))]
     {
+        // Parameters only read by the `legacy-providers` match arm above.
+        let _ = (api_url, options);
         anyhow::bail!(
             "Legacy vendor providers are disabled in this build. \
              Use `provider/model` syntax (for example `openai/gpt-4o-mini`) with `AI_PROTOCOL_DIR` pointing at an ai-protocol checkout, \
@@ -1940,17 +1943,20 @@ mod tests {
 
     // ── Primary providers ────────────────────────────────────
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_openrouter() {
         assert!(create_provider("openrouter", Some("provider-test-credential")).is_ok());
         assert!(create_provider("openrouter", None).is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_anthropic() {
         assert!(create_provider("anthropic", Some("provider-test-credential")).is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_openai() {
         assert!(create_provider("openai", Some("provider-test-credential")).is_ok());
@@ -1962,6 +1968,7 @@ mod tests {
         assert!(create_provider_with_options("openai-codex", None, &options).is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_ollama() {
         assert!(create_provider("ollama", None).is_ok());
@@ -1970,6 +1977,7 @@ mod tests {
         assert!(create_provider("ollama", Some("any-value-here")).is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_gemini() {
         assert!(create_provider("gemini", Some("test-key")).is_ok());
@@ -1981,23 +1989,27 @@ mod tests {
 
     // ── OpenAI-compatible providers ──────────────────────────
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_venice() {
         assert!(create_provider("venice", Some("vn-key")).is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_vercel() {
         assert!(create_provider("vercel", Some("key")).is_ok());
         assert!(create_provider("vercel-ai", Some("key")).is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_cloudflare() {
         assert!(create_provider("cloudflare", Some("key")).is_ok());
         assert!(create_provider("cloudflare-ai", Some("key")).is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_moonshot() {
         assert!(create_provider("moonshot", Some("key")).is_ok());
@@ -2008,6 +2020,7 @@ mod tests {
         assert!(create_provider("kimi-cn", Some("key")).is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_kimi_code() {
         assert!(create_provider("kimi-code", Some("key")).is_ok());
@@ -2015,17 +2028,20 @@ mod tests {
         assert!(create_provider("kimi_for_coding", Some("key")).is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_synthetic() {
         assert!(create_provider("synthetic", Some("key")).is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_opencode() {
         assert!(create_provider("opencode", Some("key")).is_ok());
         assert!(create_provider("opencode-zen", Some("key")).is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_zai() {
         assert!(create_provider("zai", Some("key")).is_ok());
@@ -2036,6 +2052,7 @@ mod tests {
         assert!(create_provider("z.ai-cn", Some("key")).is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_glm() {
         assert!(create_provider("glm", Some("key")).is_ok());
@@ -2046,6 +2063,7 @@ mod tests {
         assert!(create_provider("bigmodel", Some("key")).is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_minimax() {
         assert!(create_provider("minimax", Some("key")).is_ok());
@@ -2060,6 +2078,7 @@ mod tests {
         assert!(create_provider("minimax-portal-cn", Some("key")).is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_bedrock() {
         // Bedrock uses AWS env vars for credentials, not API key.
@@ -2069,12 +2088,14 @@ mod tests {
         assert!(create_provider("bedrock", Some("ignored")).is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_qianfan() {
         assert!(create_provider("qianfan", Some("key")).is_ok());
         assert!(create_provider("baidu", Some("key")).is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_doubao() {
         assert!(create_provider("doubao", Some("key")).is_ok());
@@ -2083,6 +2104,7 @@ mod tests {
         assert!(create_provider("doubao-cn", Some("key")).is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_qwen() {
         assert!(create_provider("qwen", Some("key")).is_ok());
@@ -2099,6 +2121,7 @@ mod tests {
         assert!(create_provider("qwen-oauth", Some("key")).is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_lmstudio() {
         assert!(create_provider("lmstudio", Some("key")).is_ok());
@@ -2106,6 +2129,7 @@ mod tests {
         assert!(create_provider("lmstudio", None).is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_llamacpp() {
         assert!(create_provider("llamacpp", Some("key")).is_ok());
@@ -2115,55 +2139,65 @@ mod tests {
 
     // ── Extended ecosystem ───────────────────────────────────
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_groq() {
         assert!(create_provider("groq", Some("key")).is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_mistral() {
         assert!(create_provider("mistral", Some("key")).is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_xai() {
         assert!(create_provider("xai", Some("key")).is_ok());
         assert!(create_provider("grok", Some("key")).is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_deepseek() {
         assert!(create_provider("deepseek", Some("key")).is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_together() {
         assert!(create_provider("together", Some("key")).is_ok());
         assert!(create_provider("together-ai", Some("key")).is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_fireworks() {
         assert!(create_provider("fireworks", Some("key")).is_ok());
         assert!(create_provider("fireworks-ai", Some("key")).is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_perplexity() {
         assert!(create_provider("perplexity", Some("key")).is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_cohere() {
         assert!(create_provider("cohere", Some("key")).is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_copilot() {
         assert!(create_provider("copilot", Some("key")).is_ok());
         assert!(create_provider("github-copilot", Some("key")).is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_nvidia() {
         assert!(create_provider("nvidia", Some("nvapi-test")).is_ok());
@@ -2173,6 +2207,7 @@ mod tests {
 
     // ── AI inference routers ─────────────────────────────────
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_astrai() {
         assert!(create_provider("astrai", Some("sk-astrai-test")).is_ok());
@@ -2180,24 +2215,28 @@ mod tests {
 
     // ── Custom / BYOP provider ─────────────────────────────
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_custom_url() {
         let p = create_provider("custom:https://my-llm.example.com", Some("key"));
         assert!(p.is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_custom_localhost() {
         let p = create_provider("custom:http://localhost:1234", Some("key"));
         assert!(p.is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_custom_no_key() {
         let p = create_provider("custom:https://my-llm.example.com", None);
         assert!(p.is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_custom_empty_url_errors() {
         match create_provider("custom:", None) {
@@ -2209,6 +2248,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_custom_invalid_url_errors() {
         match create_provider("custom:not-a-url", None) {
@@ -2220,6 +2260,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_custom_unsupported_scheme_errors() {
         match create_provider("custom:ftp://example.com", None) {
@@ -2231,6 +2272,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_custom_trims_whitespace() {
         let p = create_provider("custom:  https://my-llm.example.com  ", Some("key"));
@@ -2239,24 +2281,28 @@ mod tests {
 
     // ── Anthropic-compatible custom endpoints ─────────────────
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_anthropic_custom_url() {
         let p = create_provider("anthropic-custom:https://api.example.com", Some("key"));
         assert!(p.is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_anthropic_custom_trailing_slash() {
         let p = create_provider("anthropic-custom:https://api.example.com/", Some("key"));
         assert!(p.is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_anthropic_custom_no_key() {
         let p = create_provider("anthropic-custom:https://api.example.com", None);
         assert!(p.is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_anthropic_custom_empty_url_errors() {
         match create_provider("anthropic-custom:", None) {
@@ -2268,6 +2314,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_anthropic_custom_invalid_url_errors() {
         match create_provider("anthropic-custom:not-a-url", None) {
@@ -2279,6 +2326,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_anthropic_custom_unsupported_scheme_errors() {
         match create_provider("anthropic-custom:ftp://example.com", None) {
@@ -2292,6 +2340,7 @@ mod tests {
 
     // ── Error cases ──────────────────────────────────────────
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_unknown_provider_errors() {
         let p = create_provider("nonexistent", None);
@@ -2334,6 +2383,7 @@ mod tests {
         assert!(create_provider("", None).is_err());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn resilient_provider_ignores_duplicate_and_invalid_fallbacks() {
         let reliability = crate::config::ReliabilityConfig {
@@ -2362,6 +2412,7 @@ mod tests {
         assert!(provider.is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn resilient_provider_errors_for_invalid_primary() {
         let reliability = crate::config::ReliabilityConfig::default();
@@ -2378,6 +2429,7 @@ mod tests {
     /// env vars rather than inheriting the primary provider's key.  A provider
     /// that requires no key (e.g. lmstudio, ollama) must initialize
     /// successfully even when the primary uses a completely different key.
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn resilient_fallback_resolves_own_credential() {
         let reliability = crate::config::ReliabilityConfig {
@@ -2400,6 +2452,7 @@ mod tests {
 
     /// `custom:` URL entries work as fallback providers, enabling arbitrary
     /// OpenAI-compatible endpoints (e.g. local LM Studio on a Docker host).
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn resilient_fallback_supports_custom_url() {
         let reliability = crate::config::ReliabilityConfig {
@@ -2421,6 +2474,7 @@ mod tests {
 
     /// Mixed fallback chain: named providers, custom URLs, and invalid entries
     /// all coexist.  Invalid entries are silently ignored; valid ones initialize.
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn resilient_fallback_mixed_chain() {
         let reliability = crate::config::ReliabilityConfig {
@@ -2444,12 +2498,14 @@ mod tests {
         assert!(provider.is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn ollama_with_custom_url() {
         let provider = create_provider_with_url("ollama", None, Some("http://10.100.2.32:11434"));
         assert!(provider.is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn ollama_cloud_with_custom_url() {
         let provider =
@@ -2457,6 +2513,7 @@ mod tests {
         assert!(provider.is_ok());
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn factory_all_providers_create_successfully() {
         let providers = [
@@ -2512,6 +2569,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn listed_providers_have_unique_ids_and_aliases() {
         let providers = list_providers();
@@ -2541,6 +2599,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "legacy-providers")]
     #[test]
     fn listed_providers_and_aliases_are_constructible() {
         let _env_lock = env_lock();
