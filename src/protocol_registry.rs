@@ -10,20 +10,29 @@ use std::path::{Path, PathBuf};
 const ENV_PROTOCOL_DIR: &str = "AI_PROTOCOL_DIR";
 const ENV_PROTOCOL_PATH: &str = "AI_PROTOCOL_PATH";
 
-/// Resolve local ai-protocol checkout root (not HTTP URLs).
-pub fn resolve_local_protocol_root() -> Option<PathBuf> {
-    let raw = std::env::var(ENV_PROTOCOL_DIR)
-        .ok()
-        .or_else(|| std::env::var(ENV_PROTOCOL_PATH).ok())?;
-    if raw.starts_with("http://") || raw.starts_with("https://") {
+/// Parse a value of `AI_PROTOCOL_DIR` / `AI_PROTOCOL_PATH`.
+///
+/// Returns a directory only for **local** paths (not `http`/`https` URLs) that exist on disk.
+/// Used by the onboard wizard, CLI, and tests so rules stay in one place.
+pub fn protocol_root_from_path_value(raw: &str) -> Option<PathBuf> {
+    let t = raw.trim();
+    if t.is_empty() || t.starts_with("http://") || t.starts_with("https://") {
         return None;
     }
-    let p = PathBuf::from(raw.trim());
+    let p = PathBuf::from(t);
     if p.is_dir() {
         Some(p)
     } else {
         None
     }
+}
+
+/// Resolve local ai-protocol checkout root (not HTTP URLs).
+pub fn resolve_local_protocol_root() -> Option<PathBuf> {
+    let raw = std::env::var(ENV_PROTOCOL_DIR)
+        .ok()
+        .or_else(|| std::env::var(ENV_PROTOCOL_PATH).ok())?;
+    protocol_root_from_path_value(&raw)
 }
 
 fn collect_provider_files(root: &Path) -> Vec<PathBuf> {
@@ -238,5 +247,19 @@ mod tests {
         let snap = scan_protocol_root(dir.path()).expect("scan");
         assert!(snap.providers.is_empty());
         assert!(snap.models.is_empty());
+    }
+
+    #[test]
+    fn protocol_root_from_path_rejects_http_urls() {
+        assert!(protocol_root_from_path_value("https://example.com/proto").is_none());
+        assert!(protocol_root_from_path_value("http://localhost/x").is_none());
+    }
+
+    #[test]
+    fn protocol_root_from_path_accepts_existing_dir() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let p = dir.path();
+        let got = protocol_root_from_path_value(p.to_str().expect("utf8 path"));
+        assert_eq!(got.as_deref(), Some(p));
     }
 }

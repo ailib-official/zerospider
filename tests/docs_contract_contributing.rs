@@ -31,3 +31,22 @@ fn ai_lib_migration_doc_mentions_protocol_env() {
         );
     }
 }
+
+#[test]
+fn migration_legacy_doc_contract() {
+    let s = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/docs/migration-legacy-to-protocol.md"
+    ));
+    for needle in [
+        "AI_PROTOCOL_DIR",
+        "legacy-providers",
+        "ai-protocol",
+        "ZS-ML-005",
+    ] {
+        assert!(
+            s.contains(needle),
+            "docs/migration-legacy-to-protocol.md should contain {needle:?}"
+        );
+    }
+}

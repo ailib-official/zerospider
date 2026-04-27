@@ -1,6 +1,12 @@
 //! 提供者子系统，管理不同 AI 模型的连接与负载均衡。
 //! Provider subsystem for model inference backends.
 //!
+//! # Legacy string keys vs `provider/model` (migration plan Phase 5)
+//!
+//! Built-in HTTP vendor wiring lives under the opt-in `legacy-providers` Cargo feature. For
+//! `provider/model` logical ids, see **`docs/migration-legacy-to-protocol.md`** and
+//! `docs/ai-lib-migration.md`.
+//!
 //! This module implements the factory pattern for AI model providers. Each provider
 //! implements the [`Provider`] trait defined in [`traits`], and is registered in the
 //! factory function [`create_provider`] by its canonical string key (e.g., `"openai"`,

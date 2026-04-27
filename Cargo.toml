@@ -205,6 +205,8 @@ rag-pdf = ["dep:pdf-extract"]
 whatsapp-web = ["dep:wa-rs", "dep:wa-rs-core", "dep:wa-rs-binary", "dep:wa-rs-proto", "dep:wa-rs-ureq-http", "dep:wa-rs-tokio-transport", "dep:serde-big-array", "dep:prost"]
 # ai-protocol = Protocol-driven providers via ai-lib-rust (requires AI_PROTOCOL_DIR)
 ai-protocol = ["dep:ai-lib-rust", "dep:async-stream", "dep:serde_yaml"]
+# routing_mvp = ai-lib-rust experimental multi-endpoint routing (opt-in; ZS-ML-004 / migration Phase 4)
+routing_mvp = ["ai-protocol", "ai-lib-rust/routing_mvp"]
 # remote-deploy = Controlled remote deployment via SSH
 remote-deploy = []
 

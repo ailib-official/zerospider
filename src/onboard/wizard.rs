@@ -31,25 +31,14 @@ fn warn_if_ai_protocol_dir_missing_for_protocol_style_provider(provider_key: &st
     if crate::providers::parse_protocol_provider_model(provider_key).is_none() {
         return;
     }
-    let has_usable_local_root = std::env::var("AI_PROTOCOL_DIR")
-        .or_else(|_| std::env::var("AI_PROTOCOL_PATH"))
-        .ok()
-        .and_then(|raw| {
-            let t = raw.trim();
-            if t.is_empty() || t.starts_with("http://") || t.starts_with("https://") {
-                return None;
-            }
-            let p = std::path::Path::new(t);
-            p.is_dir().then_some(())
-        })
-        .is_some();
-    if has_usable_local_root {
+    if crate::protocol_registry::resolve_local_protocol_root().is_some() {
         return;
     }
     println!(
         "{}",
         style(
-            "Tip: `provider/model` protocol ids need AI_PROTOCOL_DIR (local ai-protocol checkout) for manifest-driven AiClient resolution."
+            "Tip: `provider/model` needs AI_PROTOCOL_DIR set to a local ai-protocol directory (not a URL). \
+Without manifests, AiClient::new will fail at runtime — see docs/migration-legacy-to-protocol.md."
         )
         .yellow()
     );

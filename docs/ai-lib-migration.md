@@ -2,6 +2,18 @@
 
 English summary + 中文：本页固定 **版本矩阵** 与本地开发方式，对应 `ZEROSPIDER_AI_LIB_MIGRATION_PLAN.md` Phase 0。
 
+**User-facing migration** from built-in HTTP shorthands to `provider/model` + `AI_PROTOCOL_DIR`: see **`docs/migration-legacy-to-protocol.md`**.
+
+## Compatibility window (Phase 6)
+
+ZeroSpider is **pre-1.0**; treat minors as potentially breaking until 1.0.
+
+| Area | Policy |
+|------|--------|
+| `ai-lib-rust` (crates.io) | Pin **0.9.4+** within the same minor; run `cargo test --features ai-protocol` after any bump. |
+| `ai-protocol` (Git) | Pin a **tag or commit** for reproducible QA; document the pin in your team runbook. Between tags, expect manifest schema drift — re-run protocol smoke tests when moving pins. |
+| ZeroSpider releases | Until 1.0, follow `CHANGELOG.md` [Unreleased] and semver notes for `legacy-providers` / `ai-protocol` changes. |
+
 ## Version matrix (pin for reproducible builds)
 
 | Component | Recommended | Notes |
@@ -48,6 +60,7 @@ Feature flags:
 
 - **`ai-protocol`** — enables optional `ai-lib-rust`, `protocol_registry`, and protocol CLI. **On by default.**
 - **`legacy-providers`** — built-in vendor adapters (`openrouter`, `anthropic`, `custom:`, …). **Off by default**; pass `--features legacy-providers` when you need the old string-key factory or to run `tests/provider_resolution.rs`.
+- **`routing_mvp`** — forwards `ai-lib-rust`’s experimental routing feature (optional). **Off by default.** Enable with `--features "ai-protocol routing_mvp"` when you need that code path; CI runs `cargo check -p zerospider --features "ai-protocol routing_mvp" --lib` to prevent bitrot. **Metrics:** if `AiClient` exposes a metrics API in a future `ai-lib-rust` release, wire it to your observability layer without duplicating transport retry counters already covered here vs `[reliability]`.
 
 ## CLI: manifest introspection
 
@@ -57,6 +70,31 @@ With `AI_PROTOCOL_DIR` set to a **local** ai-protocol checkout:
 zerospider models protocol-providers
 zerospider models protocol-models
 zerospider models protocol-providers --json
+```
+
+## Config: logical provider / model ids (Phase 2)
+
+Manifest-backed chat uses the same **string shape** everywhere: `default_provider` is `manifest_provider_id/logical_model_id` (examples: `openai/gpt-4o-mini`, `anthropic/claude-3-5-sonnet-20241022`). Keys under `[reliability]` use the same grammar: `fallback_providers` lists alternate **provider ids** or full `provider/model` strings; `model_fallbacks` maps a primary **model id** string to an ordered list of fallback model ids (logical names from manifests).
+
+Set API keys the way your manifests expect (e.g. `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or placeholders documented in ai-protocol). `AI_PROTOCOL_DIR` must point at the checkout whose YAML defines those provider/model entries.
+
+**Minimal `config.toml` excerpt (copy-paste — adjust paths and keys):**
+
+```toml
+# Logical default: protocol provider + model (requires AI_PROTOCOL_DIR + credentials)
+default_provider = "openai/gpt-4o-mini"
+default_model = "gpt-4o-mini"
+
+[reliability]
+# After retries, try another logical route (same string grammar as default_provider)
+fallback_providers = [
+  "anthropic/claude-3-5-sonnet-20241022",
+  "openai/gpt-4o",
+]
+
+# When this primary model errors, try these alternatives in order
+[reliability.model_fallbacks]
+"gpt-4o" = ["openai/gpt-4o-mini", "anthropic/claude-3-5-sonnet-20241022"]
 ```
 
 ## Resilience boundaries (Phase 4)
@@ -75,4 +113,5 @@ ZeroSpider layers **two** independent mechanisms; keep them from overlapping in 
 
 ## Next steps
 
-See `active/projects/zerospider/ZEROSPIDER_AI_LIB_MIGRATION_PLAN.md` in **ai-lib-plans** for phased PRs (Phase 1 = dependency bump + adapter alignment, etc.).
+- `docs/migration-legacy-to-protocol.md` — legacy shorthands, `AI_PROTOCOL_DIR`, and build/test matrix.
+- `active/projects/zerospider/ZEROSPIDER_AI_LIB_MIGRATION_PLAN.md` in **ai-lib-plans** for phased PRs.
