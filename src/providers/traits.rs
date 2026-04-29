@@ -66,6 +66,26 @@ pub struct ToolCall {
     pub arguments: String,
 }
 
+/// A tool-call delta emitted by a streaming response.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StreamToolCallDelta {
+    Started {
+        id: String,
+        name: String,
+        index: Option<u32>,
+    },
+    Arguments {
+        id: String,
+        arguments: String,
+        index: Option<u32>,
+        is_complete: Option<bool>,
+    },
+    Ended {
+        id: String,
+        index: Option<u32>,
+    },
+}
+
 /// An LLM response that may contain text, tool calls, or both.
 #[derive(Debug, Clone)]
 pub struct ChatResponse {
@@ -121,6 +141,8 @@ pub enum ConversationMessage {
 pub struct StreamChunk {
     /// Text delta for this chunk.
     pub delta: String,
+    /// Structured tool-call delta, if this chunk is not plain text.
+    pub tool_call_delta: Option<StreamToolCallDelta>,
     /// Whether this is the final chunk.
     pub is_final: bool,
     /// Approximate token count for this chunk (estimated).
@@ -132,6 +154,58 @@ impl StreamChunk {
     pub fn delta(text: impl Into<String>) -> Self {
         Self {
             delta: text.into(),
+            tool_call_delta: None,
+            is_final: false,
+            token_count: 0,
+        }
+    }
+
+    /// Create a tool-call-started chunk.
+    pub fn tool_call_started(
+        id: impl Into<String>,
+        name: impl Into<String>,
+        index: Option<u32>,
+    ) -> Self {
+        Self {
+            delta: String::new(),
+            tool_call_delta: Some(StreamToolCallDelta::Started {
+                id: id.into(),
+                name: name.into(),
+                index,
+            }),
+            is_final: false,
+            token_count: 0,
+        }
+    }
+
+    /// Create a tool-call argument delta chunk.
+    pub fn tool_call_arguments(
+        id: impl Into<String>,
+        arguments: impl Into<String>,
+        index: Option<u32>,
+        is_complete: Option<bool>,
+    ) -> Self {
+        Self {
+            delta: String::new(),
+            tool_call_delta: Some(StreamToolCallDelta::Arguments {
+                id: id.into(),
+                arguments: arguments.into(),
+                index,
+                is_complete,
+            }),
+            is_final: false,
+            token_count: 0,
+        }
+    }
+
+    /// Create a tool-call-ended chunk.
+    pub fn tool_call_ended(id: impl Into<String>, index: Option<u32>) -> Self {
+        Self {
+            delta: String::new(),
+            tool_call_delta: Some(StreamToolCallDelta::Ended {
+                id: id.into(),
+                index,
+            }),
             is_final: false,
             token_count: 0,
         }
@@ -141,6 +215,7 @@ impl StreamChunk {
     pub fn final_chunk() -> Self {
         Self {
             delta: String::new(),
+            tool_call_delta: None,
             is_final: true,
             token_count: 0,
         }
@@ -150,6 +225,7 @@ impl StreamChunk {
     pub fn error(message: impl Into<String>) -> Self {
         Self {
             delta: message.into(),
+            tool_call_delta: None,
             is_final: true,
             token_count: 0,
         }
