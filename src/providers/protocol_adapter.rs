@@ -115,6 +115,48 @@ See `docs/migration-legacy-to-protocol.md`."
             .collect()
     }
 
+    fn stream_event_to_chunk(event: ai_lib_rust::StreamingEvent) -> Option<StreamChunk> {
+        match event {
+            ai_lib_rust::StreamingEvent::PartialContentDelta { content, .. } => {
+                (!content.is_empty()).then(|| StreamChunk::delta(content).with_token_estimate())
+            }
+            ai_lib_rust::StreamingEvent::ThinkingDelta { thinking, .. } => (!thinking.is_empty())
+                .then(|| {
+                    StreamChunk::delta(format!("[thinking] {thinking}")).with_token_estimate()
+                }),
+            ai_lib_rust::StreamingEvent::ToolCallStarted {
+                tool_call_id,
+                tool_name,
+                index,
+            } => Some(StreamChunk::tool_call_started(
+                tool_call_id,
+                tool_name,
+                index,
+            )),
+            ai_lib_rust::StreamingEvent::PartialToolCall {
+                tool_call_id,
+                arguments,
+                index,
+                is_complete,
+            } => Some(StreamChunk::tool_call_arguments(
+                tool_call_id,
+                arguments,
+                index,
+                is_complete,
+            )),
+            ai_lib_rust::StreamingEvent::ToolCallEnded {
+                tool_call_id,
+                index,
+            } => Some(StreamChunk::tool_call_ended(tool_call_id, index)),
+            ai_lib_rust::StreamingEvent::StreamEnd { .. } => Some(StreamChunk::final_chunk()),
+            ai_lib_rust::StreamingEvent::StreamError { error, .. } => Some(StreamChunk::error(
+                format!("Protocol stream error: {error}"),
+            )),
+            ai_lib_rust::StreamingEvent::Metadata { .. }
+            | ai_lib_rust::StreamingEvent::FinalCandidate { .. } => None,
+        }
+    }
+
     /// Run a chat execute with retry on retryable errors.
     ///
     /// **Boundary (migration plan Phase 4–5):** this is **transport-level** retry only
@@ -362,21 +404,15 @@ impl Provider for ProtocolBackedProvider {
 
             while let Some(event) = stream.next().await {
                 match event {
-                    Ok(ai_lib_rust::StreamingEvent::PartialContentDelta { content, .. }) => {
-                        if !content.is_empty() {
-                            yield StreamChunk::delta(content).with_token_estimate();
+                    Ok(event) => {
+                        if let Some(chunk) = Self::stream_event_to_chunk(event) {
+                            let done = chunk.is_final;
+                            yield chunk;
+                            if done {
+                                break;
+                            }
                         }
                     }
-                    Ok(ai_lib_rust::StreamingEvent::ThinkingDelta { thinking, .. }) => {
-                        if !thinking.is_empty() {
-                            yield StreamChunk::delta(format!("[thinking] {thinking}")).with_token_estimate();
-                        }
-                    }
-                    Ok(ai_lib_rust::StreamingEvent::StreamEnd { .. }) => {
-                        yield StreamChunk::final_chunk();
-                        break;
-                    }
-                    Ok(_) => {}
                     Err(e) => {
                         yield StreamChunk::error(e.to_string());
                         break;
@@ -409,6 +445,7 @@ impl Provider for ProtocolBackedProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::providers::traits::StreamToolCallDelta;
 
     #[test]
     fn test_convert_messages() {
@@ -426,6 +463,123 @@ mod tests {
         let converted = ProtocolBackedProvider::convert_messages(&messages);
         assert_eq!(converted.len(), 1);
         assert_eq!(converted[0].tool_call_id.as_deref(), Some("call_1"));
+    }
+
+    #[test]
+    fn convert_messages_preserves_multi_turn_tool_conversation() {
+        let messages = vec![
+            ChatMessage::user("Find the current status"),
+            ChatMessage::assistant("I will call a tool."),
+            ChatMessage::tool_with_call_id("call_1", r#"{"status":"ok"}"#),
+            ChatMessage::assistant("The status is ok."),
+        ];
+        let converted = ProtocolBackedProvider::convert_messages(&messages);
+
+        assert_eq!(converted.len(), 4);
+        assert_eq!(converted[2].tool_call_id.as_deref(), Some("call_1"));
+
+        let serialized = serde_json::to_value(&converted).expect("serialize messages");
+        assert_eq!(serialized[0]["role"], "user");
+        assert_eq!(serialized[1]["role"], "assistant");
+        assert_eq!(serialized[2]["role"], "tool");
+        assert_eq!(serialized[3]["role"], "assistant");
+    }
+
+    #[test]
+    fn stream_event_to_chunk_maps_content_and_thinking() {
+        let content = ProtocolBackedProvider::stream_event_to_chunk(
+            ai_lib_rust::StreamingEvent::PartialContentDelta {
+                content: "hello".to_string(),
+                sequence_id: Some(1),
+            },
+        )
+        .expect("content chunk");
+        assert_eq!(content.delta, "hello");
+        assert!(content.tool_call_delta.is_none());
+        assert!(!content.is_final);
+        assert!(content.token_count > 0);
+
+        let thinking = ProtocolBackedProvider::stream_event_to_chunk(
+            ai_lib_rust::StreamingEvent::ThinkingDelta {
+                thinking: "checking".to_string(),
+                tool_consideration: None,
+            },
+        )
+        .expect("thinking chunk");
+        assert_eq!(thinking.delta, "[thinking] checking");
+        assert!(thinking.tool_call_delta.is_none());
+    }
+
+    #[test]
+    fn stream_event_to_chunk_emits_tool_call_deltas() {
+        let started = ProtocolBackedProvider::stream_event_to_chunk(
+            ai_lib_rust::StreamingEvent::ToolCallStarted {
+                tool_call_id: "call_1".to_string(),
+                tool_name: "lookup".to_string(),
+                index: Some(0),
+            },
+        )
+        .expect("tool start chunk");
+        assert_eq!(
+            started.tool_call_delta,
+            Some(StreamToolCallDelta::Started {
+                id: "call_1".to_string(),
+                name: "lookup".to_string(),
+                index: Some(0),
+            })
+        );
+
+        let partial = ProtocolBackedProvider::stream_event_to_chunk(
+            ai_lib_rust::StreamingEvent::PartialToolCall {
+                tool_call_id: "call_1".to_string(),
+                arguments: r#"{"query":"zerospider"}"#.to_string(),
+                index: Some(0),
+                is_complete: Some(false),
+            },
+        )
+        .expect("tool arguments chunk");
+        assert_eq!(
+            partial.tool_call_delta,
+            Some(StreamToolCallDelta::Arguments {
+                id: "call_1".to_string(),
+                arguments: r#"{"query":"zerospider"}"#.to_string(),
+                index: Some(0),
+                is_complete: Some(false),
+            })
+        );
+
+        let ended = ProtocolBackedProvider::stream_event_to_chunk(
+            ai_lib_rust::StreamingEvent::ToolCallEnded {
+                tool_call_id: "call_1".to_string(),
+                index: Some(0),
+            },
+        )
+        .expect("tool end chunk");
+        assert_eq!(
+            ended.tool_call_delta,
+            Some(StreamToolCallDelta::Ended {
+                id: "call_1".to_string(),
+                index: Some(0),
+            })
+        );
+    }
+
+    #[test]
+    fn stream_event_to_chunk_handles_end_and_ignores_metadata() {
+        let final_chunk =
+            ProtocolBackedProvider::stream_event_to_chunk(ai_lib_rust::StreamingEvent::StreamEnd {
+                finish_reason: Some("stop".to_string()),
+            })
+            .expect("final chunk");
+        assert!(final_chunk.is_final);
+
+        let metadata =
+            ProtocolBackedProvider::stream_event_to_chunk(ai_lib_rust::StreamingEvent::Metadata {
+                usage: Some(serde_json::json!({"input_tokens": 1})),
+                finish_reason: None,
+                stop_reason: None,
+            });
+        assert!(metadata.is_none());
     }
 
     #[test]
