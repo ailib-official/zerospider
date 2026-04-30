@@ -2,6 +2,7 @@
 * text=auto
 
 # Force LF for scripts and build-critical files
+CHANGELOG.md text eol=lf
 *.sh text eol=lf
 Dockerfile* text eol=lf
 *.rs text eol=lf
