@@ -45,6 +45,13 @@ ZeroSpider still accepts the **same string shape** in `default_provider` / `defa
 | `cargo test --no-default-features --features ai-protocol` | **Manifest-only** build (no legacy factory). |
 | `cargo test --features "ai-protocol legacy-providers"` | Full **legacy** HTTP matrix + `tests/provider_resolution.rs` (CI runs this in addition). |
 
+Current ai-lib-rust feature decision: ZeroSpider does **not** enable ai-lib-rust
+`embeddings`, `batch`, or `telemetry` features yet. Chat/streaming stays on the
+protocol path; embeddings and batch APIs need explicit ZeroSpider call sites
+before enabling those dependency features. Telemetry continues through
+`observability-otel`; ai-lib metrics should be wired in a future task only with a
+documented no-duplicate-counter boundary.
+
 ## 4. CI / test matrix (Phase 5)
 
 - **Default PR gate:** `ai-protocol` tests and `cargo check` (including `routing_mvp` compile gate as documented in `docs/ai-lib-migration.md`).

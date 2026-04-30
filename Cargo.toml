@@ -143,8 +143,8 @@ opentelemetry-otlp = { version = "0.31", default-features = false, features = ["
 tokio-serial = { version = "5", default-features = false, optional = true }
 
 # ai-lib-rust — Protocol-driven AI API client (crates.io, optional).
-# Version matrix: see docs/ai-lib-migration.md (target 0.9.x per migration plan).
-ai-lib-rust = { version = "0.9.4", optional = true, features = ["embeddings", "batch", "telemetry"] }
+# Version matrix and deferred feature decisions: see docs/ai-lib-migration.md.
+ai-lib-rust = { version = "0.9.4", optional = true }
 async-stream = { version = "0.3", optional = true }
 serde_yaml = { version = "0.9", optional = true }
 

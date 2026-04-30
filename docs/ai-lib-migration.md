@@ -62,6 +62,22 @@ Feature flags:
 - **`legacy-providers`** — built-in vendor adapters (`openrouter`, `anthropic`, `custom:`, …). **Off by default**; pass `--features legacy-providers` when you need the old string-key factory or to run `tests/provider_resolution.rs`.
 - **`routing_mvp`** — forwards `ai-lib-rust`’s experimental routing feature (optional). **Off by default.** Enable with `--features "ai-protocol routing_mvp"` when you need that code path; CI runs `cargo check -p zerospider --features "ai-protocol routing_mvp" --lib` to prevent bitrot. **Metrics:** if `AiClient` exposes a metrics API in a future `ai-lib-rust` release, wire it to your observability layer without duplicating transport retry counters already covered here vs `[reliability]`.
 
+### Deferred ai-lib-rust feature decisions (ZS-ML-009)
+
+ZeroSpider currently uses `ai-lib-rust` for chat and streaming only. The optional
+`ai-lib-rust` features `embeddings`, `batch`, and `telemetry` are intentionally
+**not enabled** in `Cargo.toml` until ZeroSpider has concrete callers for them.
+
+| ai-lib-rust feature | Decision | Rationale |
+|---------------------|----------|-----------|
+| `embeddings` | Deferred / removed from dependency features | No ZeroSpider embedding path currently calls ai-lib; enabling it would add dependency weight without runtime value. |
+| `batch` | Deferred / removed from dependency features | No batch API surface is wired in ZeroSpider. |
+| `telemetry` | Deferred / removed from dependency features | ZeroSpider’s existing telemetry path is `observability-otel`; ai-lib metrics must be wired deliberately later to avoid duplicate counters. |
+
+When adding any of these paths later, introduce a dedicated ZeroSpider feature,
+document the OpenTelemetry / metrics boundary, and add focused tests before
+turning on the corresponding `ai-lib-rust` feature.
+
 ## CLI: manifest introspection
 
 With `AI_PROTOCOL_DIR` set to a **local** ai-protocol checkout:
@@ -109,7 +125,7 @@ ZeroSpider layers **two** independent mechanisms; keep them from overlapping in 
 **Guidance**
 
 - Prefer **one** layer to own a given failure class: e.g. let ai-lib handle 429 backoff for a single logical model; use `fallback_providers` when you truly want a different backend (another provider id or `custom:` URL).
-- Optional ai-lib features such as **`routing_mvp`** or **`AiClient::metrics()`** are not required for the manifest path; enable deliberately when you add routing or SLO dashboards.
+- Optional ai-lib features such as **`routing_mvp`** or future **`AiClient::metrics()`** integration are not required for the manifest path; enable deliberately when you add routing or SLO dashboards. As of ZS-ML-009, ai-lib `telemetry` is not enabled and does not feed ZeroSpider’s OpenTelemetry pipeline.
 
 ## Next steps
 
