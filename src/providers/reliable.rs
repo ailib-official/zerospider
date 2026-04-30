@@ -1271,6 +1271,75 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn protocol_retry_does_not_compound_with_reliable_provider() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let provider = ReliableProvider::new(
+            vec![(
+                "protocol:openai/gpt-4o".into(),
+                Box::new(MockProvider {
+                    calls: Arc::clone(&calls),
+                    fail_until_attempt: usize::MAX,
+                    response: "never",
+                    error: "500 protocol transport exhausted after internal retry",
+                }),
+            )],
+            2,
+            1,
+        );
+
+        let err = provider
+            .simple_chat("hello", "openai/gpt-4o", 0.0)
+            .await
+            .expect_err("provider should fail after app-layer retry budget");
+        let msg = err.to_string();
+
+        // One provider call per app-layer attempt: initial + provider_retries.
+        // Any transport retry inside a protocol-backed provider must stay hidden
+        // behind that single provider call and must not multiply this count.
+        assert_eq!(calls.load(Ordering::SeqCst), 3);
+        assert!(msg.contains("attempt 3/3"));
+    }
+
+    #[tokio::test]
+    async fn reliable_provider_falls_back_for_protocol_style_model_ids() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mock = Arc::new(ModelAwareMock {
+            calls: Arc::clone(&calls),
+            models_seen: parking_lot::Mutex::new(Vec::new()),
+            fail_models: vec!["openai/gpt-4o"],
+            response: "ok from fallback logical model",
+        });
+
+        let mut fallbacks = HashMap::new();
+        fallbacks.insert(
+            "openai/gpt-4o".to_string(),
+            vec!["anthropic/claude-3-5-sonnet".to_string()],
+        );
+
+        let provider = ReliableProvider::new(
+            vec![(
+                "protocol-backed".into(),
+                Box::new(mock.clone()) as Box<dyn Provider>,
+            )],
+            0,
+            1,
+        )
+        .with_model_fallbacks(fallbacks);
+
+        let result = provider
+            .simple_chat("hello", "openai/gpt-4o", 0.0)
+            .await
+            .unwrap();
+        assert_eq!(result, "ok from fallback logical model");
+
+        let seen = mock.models_seen.lock();
+        assert_eq!(
+            seen.as_slice(),
+            ["openai/gpt-4o", "anthropic/claude-3-5-sonnet"]
+        );
+    }
+
+    #[tokio::test]
     async fn model_failover_all_models_fail() {
         let calls = Arc::new(AtomicUsize::new(0));
         let mock = Arc::new(ModelAwareMock {

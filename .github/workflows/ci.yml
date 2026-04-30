@@ -44,3 +44,6 @@ jobs:
 
       - name: cargo check (protocol-only, no legacy providers)
         run: cargo check -p zerospider --no-default-features --features ai-protocol --lib
+
+      - name: cargo test (protocol-only, no legacy providers)
+        run: cargo test -p zerospider --no-default-features --features ai-protocol
