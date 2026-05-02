@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **PT-074 BYOK availability:** protocol provider discovery now delegates credential availability to ai-lib-rust's unified credential chain (endpoint.auth, V1 auth, conventional env fallback, and keyring when enabled) instead of maintaining a ZeroSpider-only env scan.
 - **Default Cargo features** now include only `ai-protocol` (not `legacy-providers`), aligning with the ai-lib migration plan’s “protocol-first” default. Enable `--features legacy-providers` (or a non-default dist profile that turns it on) for built-in HTTP vendor adapters and the full legacy provider factory test matrix.
 
 ### Dependencies
@@ -33,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Testing
 
+- **PT-074 BYOK smoke:** protocol registry unit tests cover V2 endpoint.auth.token_env and conventional env fallback availability without legacy-providers.
 - **Config**: regression test that TOML accepts protocol-style `default_provider` and `[reliability]` entries (ZS-ML-003).
 - **Protocol env**: unit tests for `protocol_root_from_path_value` (reject HTTP URLs; accept existing directories) (ZS-ML-006).
 - **Docs**: contract test for `docs/migration-legacy-to-protocol.md` (ZS-ML-005).

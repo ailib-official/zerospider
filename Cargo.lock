@@ -90,8 +90,7 @@ dependencies = [
 [[package]]
 name = "ai-lib-contact"
 version = "0.9.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49ac886f5c50ce16b096ceb2aa8d3720dcb9d45ac41c53f955b80a4381954cfd"
+source = "git+https://github.com/ailib-official/ai-lib-rust?rev=ad6e0d3e778d490b0fedb79293c7ab7093378cc6#ad6e0d3e778d490b0fedb79293c7ab7093378cc6"
 dependencies = [
  "ai-lib-core",
  "async-trait",
@@ -108,9 +107,8 @@ dependencies = [
 
 [[package]]
 name = "ai-lib-core"
-version = "0.9.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "114c1492c0ab865f4bfa197f1eff7dc3fc259b94fef744a982d9dbd12414f312"
+version = "0.9.5"
+source = "git+https://github.com/ailib-official/ai-lib-rust?rev=ad6e0d3e778d490b0fedb79293c7ab7093378cc6#ad6e0d3e778d490b0fedb79293c7ab7093378cc6"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -143,8 +141,7 @@ dependencies = [
 [[package]]
 name = "ai-lib-rust"
 version = "0.9.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b78ce58ff9e9ff3ad73c50102c6be06a664ec167b86f6d85b568033d803ae8b5"
+source = "git+https://github.com/ailib-official/ai-lib-rust?rev=ad6e0d3e778d490b0fedb79293c7ab7093378cc6#ad6e0d3e778d490b0fedb79293c7ab7093378cc6"
 dependencies = [
  "ai-lib-contact",
  "ai-lib-core",

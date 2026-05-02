@@ -1,7 +1,6 @@
 //! Scan `AI_PROTOCOL_DIR` for provider manifests and model registry entries.
 //! Used by CLI `models protocol-*` and availability checks.
 
-use ai_lib_rust::protocol::AuthConfig;
 use ai_lib_rust::protocol::ProtocolManifest;
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -69,25 +68,6 @@ fn provider_id_from_path(path: &Path) -> Option<String> {
         .map(std::string::ToString::to_string)
 }
 
-fn required_envs(auth: &AuthConfig) -> Vec<String> {
-    let mut v = Vec::new();
-    if let Some(ref k) = auth.key_env {
-        v.push(k.clone());
-    }
-    if let Some(ref t) = auth.token_env {
-        v.push(t.clone());
-    }
-    v.sort();
-    v.dedup();
-    v
-}
-
-fn env_nonempty(name: &str) -> bool {
-    std::env::var(name)
-        .ok()
-        .is_some_and(|s| !s.trim().is_empty())
-}
-
 fn load_provider_manifest(path: &Path) -> anyhow::Result<ProtocolManifest> {
     let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
     let bytes = std::fs::read(path)?;
@@ -139,12 +119,10 @@ pub fn scan_protocol_root(root: &Path) -> anyhow::Result<ProtocolRegistrySnapsho
                 continue;
             }
         };
-        let required_envs = manifest
-            .auth
-            .as_ref()
-            .map(required_envs)
-            .unwrap_or_default();
-        let available = required_envs.is_empty() || required_envs.iter().all(|n| env_nonempty(n));
+        let required_envs = ai_lib_rust::credentials::required_envs(&manifest);
+        let has_auth = ai_lib_rust::credentials::primary_auth(&manifest).is_some();
+        let resolved = ai_lib_rust::credentials::resolve_credential(&manifest, None);
+        let available = !has_auth || resolved.secret().is_some();
         let resolved_id = if manifest.id.trim().is_empty() {
             id
         } else {
@@ -240,6 +218,35 @@ pub fn scan_protocol_root(root: &Path) -> anyhow::Result<ProtocolRegistrySnapsho
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use std::sync::Mutex;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    struct EnvGuard {
+        key: &'static str,
+        old: Option<String>,
+    }
+
+    impl EnvGuard {
+        fn set(key: &'static str, value: Option<&str>) -> Self {
+            let old = std::env::var(key).ok();
+            match value {
+                Some(value) => std::env::set_var(key, value),
+                None => std::env::remove_var(key),
+            }
+            Self { key, old }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            match self.old.as_ref() {
+                Some(value) => std::env::set_var(self.key, value),
+                None => std::env::remove_var(self.key),
+            }
+        }
+    }
 
     #[test]
     fn scan_empty_dir_yields_empty() {
@@ -261,5 +268,91 @@ mod tests {
         let p = dir.path();
         let got = protocol_root_from_path_value(p.to_str().expect("utf8 path"));
         assert_eq!(got.as_deref(), Some(p));
+    }
+
+    #[test]
+    fn scan_provider_uses_ai_lib_endpoint_auth_availability() {
+        let _guard = ENV_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _env = EnvGuard::set("ZEROSPIDER_PT074_TOKEN", Some("test-token"));
+        let dir = tempfile::tempdir().expect("tempdir");
+        let providers = dir.path().join("v2").join("providers");
+        fs::create_dir_all(&providers).expect("provider dir");
+        fs::write(
+            providers.join("pt074.yaml"),
+            r#"
+id: pt074
+protocol_version: v2-alpha
+provider_id: pt074-provider
+name: PT-074 Provider
+version: v2
+status: stable
+category: ai_provider
+official_url: https://example.com
+support_contact: support@example.com
+capabilities: [chat]
+endpoint:
+  base_url: https://example.com/v1
+  auth:
+    type: bearer
+    token_env: ZEROSPIDER_PT074_TOKEN
+"#,
+        )
+        .expect("manifest");
+
+        let snap = scan_protocol_root(dir.path()).expect("scan");
+        let provider = snap
+            .providers
+            .iter()
+            .find(|provider| provider.id == "pt074")
+            .expect("provider");
+        assert_eq!(provider.required_envs, vec!["ZEROSPIDER_PT074_TOKEN"]);
+        assert!(provider.available);
+    }
+
+    #[test]
+    fn scan_provider_uses_ai_lib_conventional_env_fallback() {
+        let _guard = ENV_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _manifest_env = EnvGuard::set("ZEROSPIDER_PT074_MISSING_TOKEN", None);
+        let _conventional_env = EnvGuard::set("PT074_PROVIDER_API_KEY", Some("test-token"));
+        let dir = tempfile::tempdir().expect("tempdir");
+        let providers = dir.path().join("v2").join("providers");
+        fs::create_dir_all(&providers).expect("provider dir");
+        fs::write(
+            providers.join("pt074.yaml"),
+            r#"
+id: pt074
+protocol_version: v2-alpha
+provider_id: pt074-provider
+name: PT-074 Provider
+version: v2
+status: stable
+category: ai_provider
+official_url: https://example.com
+support_contact: support@example.com
+capabilities: [chat]
+endpoint:
+  base_url: https://example.com/v1
+  auth:
+    type: bearer
+    token_env: ZEROSPIDER_PT074_MISSING_TOKEN
+"#,
+        )
+        .expect("manifest");
+
+        let snap = scan_protocol_root(dir.path()).expect("scan");
+        let provider = snap
+            .providers
+            .iter()
+            .find(|provider| provider.id == "pt074")
+            .expect("provider");
+        assert_eq!(
+            provider.required_envs,
+            vec!["ZEROSPIDER_PT074_MISSING_TOKEN"]
+        );
+        assert!(provider.available);
     }
 }
