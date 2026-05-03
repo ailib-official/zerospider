@@ -10,7 +10,7 @@ ZeroSpider is **pre-1.0**; treat minors as potentially breaking until 1.0.
 
 | Area | Policy |
 |------|--------|
-| `ai-lib-rust` (crates.io) | Pin **0.9.4+** within the same minor; run `cargo test --features ai-protocol` after any bump. |
+| `ai-lib-rust` (crates.io or pinned git during PT-074 rollout) | Pin **0.9.4+** within the same minor; run `cargo test --features ai-protocol` after any bump. During the PT-074 credential-chain rollout, use the reviewed ai-lib-rust commit that exposes `ai_lib_rust::credentials` until the next crates.io patch is published. |
 | `ai-protocol` (Git) | Pin a **tag or commit** for reproducible QA; document the pin in your team runbook. Between tags, expect manifest schema drift — re-run protocol smoke tests when moving pins. |
 | ZeroSpider releases | Until 1.0, follow `CHANGELOG.md` [Unreleased] and semver notes for `legacy-providers` / `ai-protocol` changes. |
 
@@ -18,7 +18,7 @@ ZeroSpider is **pre-1.0**; treat minors as potentially breaking until 1.0.
 
 | Component | Recommended | Notes |
 |-----------|-------------|--------|
-| `ai-lib-rust` (crates.io) | **0.9.4+** | Workspace facade over `ai-lib-core` + policy layers; use same minor as protocol QA. |
+| `ai-lib-rust` (crates.io or pinned git during PT-074 rollout) | **0.9.4+** | Workspace facade over `ai-lib-core` + policy layers; use same minor as protocol QA. PT-074 availability checks consume `ai_lib_rust::credentials` instead of duplicating manifest env logic in ZeroSpider. |
 | `ai-protocol` (Git) | tag or commit documented in team runbook | Manifest YAML + JSON Schema; set `AI_PROTOCOL_DIR` to a checkout root. |
 
 Patch bumps (0.9.x) should stay semver-compatible; re-run `cargo test --features ai-protocol` after any bump.
@@ -30,6 +30,17 @@ Patch bumps (0.9.x) should stay semver-compatible; re-run `cargo test --features
 | `AI_PROTOCOL_DIR` | Root of an `ai-protocol` clone (contains provider manifests / schema). Required for manifest-driven `AiClient` resolution at runtime. |
 
 Optional: `AI_PROTOCOL_PATH` is recognized by some ai-lib tooling as an alias—prefer `AI_PROTOCOL_DIR` for ZeroSpider docs consistency.
+
+## BYOK credential availability
+
+ZeroSpider does not maintain a separate provider credential table for the protocol path. Provider availability shown by `zerospider models protocol-providers` is delegated to ai-lib-rust's unified credential chain:
+
+1. explicit application credential, when a caller supplies one to ai-lib;
+2. the active manifest auth block (`endpoint.auth` first, then top-level `auth` for V1 compatibility);
+3. conventional provider env fallback such as `OPENAI_API_KEY`;
+4. native keyring support when enabled by ai-lib-rust.
+
+The CLI reports only env var names and availability metadata. It must never print raw BYOK values.
 
 ## Local development with a git checkout
 

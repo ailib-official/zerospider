@@ -12,6 +12,7 @@ the **protocol-first** model: logical ids like `openai/gpt-4o-mini` resolved thr
 | **Legacy path** | Code compiled with the **`legacy-providers`** Cargo feature: large match arms in `src/providers/mod.rs` for `openrouter`, `anthropic`, `custom:…`, and related aliases. |
 | **Default path (today)** | `default = ["ai-protocol"]` in `Cargo.toml` — you get the protocol stack and `ProtocolBackedProvider`; you do **not** get the legacy match arms unless you add `--features legacy-providers`. |
 | **Protocol root** | Directory where YAML/JSON under `v2/providers` (or `dist/…`) describe providers and models. Set via **`AI_PROTOCOL_DIR`**. |
+| **BYOK availability** | Whether ai-lib-rust can resolve a credential for the provider through the unified credential chain. ZeroSpider reports the result but does not inspect or log secret values. |
 
 ## 1. Environment variables
 
@@ -19,9 +20,11 @@ the **protocol-first** model: logical ids like `openai/gpt-4o-mini` resolved thr
 |----------|------|
 | **`AI_PROTOCOL_DIR`** | **Required** for manifest-driven resolution: absolute or relative path to a **local** `ai-protocol` checkout (a directory, **not** an `http(s)://` URL). |
 | `AI_PROTOCOL_PATH` | Backwards-compatible alias; same rules. Prefer `AI_PROTOCOL_DIR` in docs. |
-| Vendor keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, …) | Unchanged: whatever your **manifests** and auth blocks expect. The protocol files describe *which* env vars a provider needs. |
+| Vendor keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, …) | Unchanged: whatever your **manifests** and auth blocks expect. ai-lib-rust resolves `endpoint.auth`, top-level `auth`, conventional provider env fallbacks, and native keyring entries where enabled. |
 
 If `AI_PROTOCOL_DIR` is wrong or points at a non-directory, `AiClient::new("provider/model")` fails. Quick setup prints a **yellow tip** when you choose a `provider/model` id but no usable local root is configured.
+
+`zerospider models protocol-providers` uses the same ai-lib credential resolver for its `available` column, so it catches both V2 `endpoint.auth.token_env` and conventional fallbacks such as `OPENAI_API_KEY` without enabling `legacy-providers`.
 
 ## 2. Shorthand: old provider name → new logical id
 
