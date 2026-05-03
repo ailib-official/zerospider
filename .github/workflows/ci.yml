@@ -24,9 +24,9 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
-      - name: Verify Cargo.lock reproducibility
+      - name: Verify Cargo.lock is honored
         run: |
-          cargo generate-lockfile
+          cargo fetch --locked
           git diff --exit-code Cargo.lock
 
       - name: cargo fmt --check
