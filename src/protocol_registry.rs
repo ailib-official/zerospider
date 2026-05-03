@@ -121,8 +121,10 @@ pub fn scan_protocol_root(root: &Path) -> anyhow::Result<ProtocolRegistrySnapsho
         };
         let required_envs = ai_lib_rust::credentials::required_envs(&manifest);
         let has_auth = ai_lib_rust::credentials::primary_auth(&manifest).is_some();
-        let resolved = ai_lib_rust::credentials::resolve_credential(&manifest, None);
-        let available = !has_auth || resolved.secret().is_some();
+        let available = !has_auth
+            || ai_lib_rust::credentials::resolve_credential(&manifest, None)
+                .secret()
+                .is_some();
         let resolved_id = if manifest.id.trim().is_empty() {
             id
         } else {

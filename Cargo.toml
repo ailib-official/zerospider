@@ -144,6 +144,7 @@ tokio-serial = { version = "5", default-features = false, optional = true }
 
 # ai-lib-rust — Protocol-driven AI API client (pinned git during PT-074 rollout).
 # Switch back to crates.io once the next 0.9.x patch containing `ai_lib_rust::credentials` is published.
+# The rev is a merge commit on ailib-official/ai-lib-rust main; CI regenerates Cargo.lock and fails on drift.
 ai-lib-rust = { git = "https://github.com/ailib-official/ai-lib-rust", rev = "ad6e0d3e778d490b0fedb79293c7ab7093378cc6", optional = true }
 async-stream = { version = "0.3", optional = true }
 serde_yaml = { version = "0.9", optional = true }
