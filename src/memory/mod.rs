@@ -95,6 +95,15 @@ pub fn is_assistant_autosave_key(key: &str) -> bool {
 ///   excluded when a current session is active (stops cross-session bleed).
 #[must_use]
 pub fn should_inject_for_session(entry: &MemoryEntry, current_session: Option<&str>) -> bool {
+    // DAG internodal keys are session-namespaced; never treat another graph's
+    // `dag_art:` row as Core-like global knowledge (VL-NA-041).
+    if let Some(current) = current_session {
+        if let Some(rest) = entry.key.strip_prefix("dag_art:") {
+            if !rest.starts_with(&format!("{current}:")) {
+                return false;
+            }
+        }
+    }
     if matches!(entry.category, MemoryCategory::Core) {
         return true;
     }
@@ -479,6 +488,26 @@ mod tests {
         };
         assert!(should_inject_for_session(&core, Some("sess-a")));
         assert!(should_inject_for_session(&core, None));
+        let foreign_art = MemoryEntry {
+            id: "art".into(),
+            key: "dag_art:sess-b:node1".into(),
+            content: "old xray findings".into(),
+            category: MemoryCategory::Core,
+            timestamp: "now".into(),
+            session_id: Some("sess-b".into()),
+            score: Some(1.0),
+        };
+        assert!(!should_inject_for_session(&foreign_art, Some("sess-a")));
+        let own_art = MemoryEntry {
+            id: "art2".into(),
+            key: "dag_art:sess-a:node1".into(),
+            content: "this graph".into(),
+            category: MemoryCategory::Custom("dag".into()),
+            timestamp: "now".into(),
+            session_id: Some("sess-a".into()),
+            score: Some(1.0),
+        };
+        assert!(should_inject_for_session(&own_art, Some("sess-a")));
     }
 
     #[test]

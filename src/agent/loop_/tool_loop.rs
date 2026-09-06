@@ -611,14 +611,6 @@ pub(crate) async fn run_tool_call_loop(
         let mut skip_outputs: Vec<Option<String>> = vec![None; tool_calls.len()];
         let mut runnable: Vec<ParsedToolCall> = Vec::new();
         let mut runnable_idx: Vec<usize> = Vec::new();
-        let batch_has_shell = tool_calls
-            .iter()
-            .any(|c| c.name.eq_ignore_ascii_case("shell"));
-        if batch_has_shell {
-            with_probe(soft_fail, &mut local_probe, |g| {
-                g.begin_shell_round();
-            });
-        }
         for (i, call) in tool_calls.iter().enumerate() {
             let is_shell = call.name.eq_ignore_ascii_case("shell");
             if is_shell {
@@ -664,6 +656,26 @@ pub(crate) async fn run_tool_call_loop(
             if let Some(msg) = skip {
                 batch_outputs[i] = msg;
             }
+        }
+        let mut counted_round = false;
+        for (call, out) in tool_calls.iter().zip(batch_outputs.iter()) {
+            if !call.name.eq_ignore_ascii_case("shell") {
+                continue;
+            }
+            if crate::agent::probe_dedup::shell_output_counts_as_round(out) {
+                counted_round = true;
+            } else {
+                let fp =
+                    crate::agent::probe_dedup::tool_probe_fingerprint(&call.name, &call.arguments);
+                with_probe(soft_fail, &mut local_probe, |g| {
+                    g.retract_unexecuted(&fp);
+                });
+            }
+        }
+        if counted_round {
+            with_probe(soft_fail, &mut local_probe, |g| {
+                g.record_executed_round();
+            });
         }
         let individual_results = batch_outputs;
 
