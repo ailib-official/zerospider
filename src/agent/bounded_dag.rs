@@ -133,9 +133,11 @@ pub fn node_task_card(dag_id: &str, node: &DagNode, index: usize, node_count: us
          Independent checks: several commands in one ssh / one assistant message. \
          Work in this node's vantage. If INPUTS or USER TASK already name a vantage \
          (host, path, artifact), start there — do not substitute a local stand-in probe. \
-         Do not re-run a probe whose result is already in INPUTS. \
+         Do not re-run a probe whose result is already in INPUTS as this-hop-tool or this-graph-artifact. \
          Do not rewrite the same check as a new script_v2/v3 file; fix or compound the command. \
-         Do not `find /` or open-ended local scans.";
+         Do not `find /` or open-ended local scans. \
+         prior-graph-artifact (and other-session memory) is context for gaps only — \
+         not a substitute for this-hop-tool on a live host or service check.";
     let success = if last {
         "Stop with the operator-visible conclusion as the last assistant message. \
          Do not emit internodal envelope headers (HANDOFF, verdict:, findings:, pointers:, gaps:). \
@@ -145,6 +147,7 @@ pub fn node_task_card(dag_id: &str, node: &DagNode, index: usize, node_count: us
          Name evidence_layer (this-hop-tool | this-graph-artifact | prior-graph-artifact | \
          host-config | protocol-dist | upstream-live | inference). \
          Recommend changes only on a layer you observed this hop. \
+         Live health/status facts need this-hop-tool or this-graph-artifact from this run. \
          If later evidence revises an earlier exclusivity, say the revision. \
          The host delivers this text to the user; internodal handoff is only for mid-graph nodes."
     } else {
@@ -154,15 +157,14 @@ pub fn node_task_card(dag_id: &str, node: &DagNode, index: usize, node_count: us
          - claim_kind: observation | inference | exclusivity\n\
          - evidence_layer: this-hop-tool | this-graph-artifact | prior-graph-artifact | host-config | protocol-dist | upstream-live | inference\n\
          - verdict: ok | partial | failed\n\
-         - findings: facts at this vantage (not a census of unseen vantages)\n\
+         - findings: facts at this vantage from this-hop-tool / this-graph-artifact (not a census of unseen vantages; prior-graph belongs in gaps)\n\
          - pointers: identifiers the next node needs (not source dumps)\n\
          - gaps: unknowns; keep exclusivity here until coverage=exhaustive"
     };
-    let mid_hint = if last {
-        "Aim for at most four shell rounds; then conclude."
-    } else {
-        "Aim for at most four shell rounds; then HANDOFF."
-    };
+    let mid_hint = "The host counts a shell round only after a command actually ran \
+         (policy-deny and repeat-skip do not consume the cap). After four such rounds \
+         the host injects a cap notice. Do not stop early or claim a cap unless that \
+         notice appeared. Until then, compound remaining checks in one ssh.";
     format!(
         "NODE TASK (host-filled slots; do not rewrite this card)\n\
          - dag_id: {dag_id}\n\
@@ -286,6 +288,13 @@ mod tests {
         assert!(end.contains("operator-visible conclusion"));
         assert!(end.contains("evidence_layer"));
         assert!(end.contains("coverage=exhaustive"));
+        assert!(
+            !card.contains("Aim for at most four shell rounds"),
+            "must not teach early HANDOFF on a soft four-round slogan: {card}"
+        );
+        assert!(card.contains("this-hop-tool"));
+        assert!(card.contains("SHELL_ROUND_CAP") || card.contains("cap notice"));
+        assert!(card.contains("actually ran"));
     }
 
     #[test]

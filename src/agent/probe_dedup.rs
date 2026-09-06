@@ -31,9 +31,14 @@ impl HopProbeGovernor {
         Self::default()
     }
 
-    /// Count one assistant batch that includes at least one shell call.
-    pub fn begin_shell_round(&mut self) {
+    /// Count one assistant batch that actually ran a shell (not deny / skip / cap).
+    pub fn record_executed_round(&mut self) {
         self.shell_rounds = self.shell_rounds.saturating_add(1);
+    }
+
+    /// Drop a fingerprint that was reserved for Run but never executed (policy-deny / approval).
+    pub fn retract_unexecuted(&mut self, fingerprint: &str) {
+        self.seen.remove(fingerprint);
     }
 
     #[must_use]
@@ -43,7 +48,7 @@ impl HopProbeGovernor {
 
     #[must_use]
     pub fn decide_shell(&mut self, fingerprint: &str) -> ProbeShellDecision {
-        if self.shell_rounds > MAX_SHELL_ROUNDS_PER_HOP {
+        if self.shell_rounds >= MAX_SHELL_ROUNDS_PER_HOP {
             self.notices.push(SHELL_ROUND_CAP_NOTICE.to_string());
             return ProbeShellDecision::Cap;
         }
@@ -58,6 +63,30 @@ impl HopProbeGovernor {
     pub fn drain_notices(&mut self) -> Vec<String> {
         std::mem::take(&mut self.notices)
     }
+}
+
+/// True when this tool result consumed a host shell-round (VL-NA-041).
+#[must_use]
+pub fn shell_output_counts_as_round(output: &str) -> bool {
+    let t = output.trim();
+    if t.is_empty() {
+        return false;
+    }
+    if t.contains(REPEAT_PROBE_NOTICE) || t.contains(SHELL_ROUND_CAP_NOTICE) {
+        return false;
+    }
+    if t.contains("[policy_deny]") || t.contains("[sandbox_deny]") || t.contains("[needs_approval]")
+    {
+        return false;
+    }
+    let head = t.lines().next().unwrap_or(t);
+    let l = head.to_ascii_lowercase();
+    if l.contains("denied")
+        && (l.contains("approval") || l.contains("policy") || l.contains("security"))
+    {
+        return false;
+    }
+    true
 }
 
 /// Fingerprint a tool call so equivalent probes collapse (whitespace + script version).
@@ -190,27 +219,56 @@ mod tests {
     fn governor_survives_reentry_and_caps_fifth_round() {
         let mut g = HopProbeGovernor::new();
         for round in 1..=4 {
-            g.begin_shell_round();
             let fp = tool_probe_fingerprint("shell", &json!({"command": format!("echo {round}")}));
             assert_eq!(g.decide_shell(&fp), ProbeShellDecision::Run);
+            g.record_executed_round();
         }
-        g.begin_shell_round();
         let fp = tool_probe_fingerprint("shell", &json!({"command": "echo 5"}));
         assert_eq!(g.decide_shell(&fp), ProbeShellDecision::Cap);
-        // Same node re-enters tool loop with the same governor.
-        g.begin_shell_round();
         let fp2 = tool_probe_fingerprint("shell", &json!({"command": "echo 6"}));
         assert_eq!(g.decide_shell(&fp2), ProbeShellDecision::Cap);
-        assert!(g.shell_rounds() >= 5);
+        assert_eq!(g.shell_rounds(), 4);
     }
 
     #[test]
     fn governor_skips_repeat_fingerprint() {
         let mut g = HopProbeGovernor::new();
-        g.begin_shell_round();
         let fp = tool_probe_fingerprint("shell", &json!({"command": "pwd"}));
         assert_eq!(g.decide_shell(&fp), ProbeShellDecision::Run);
-        g.begin_shell_round();
+        g.record_executed_round();
+        assert_eq!(g.decide_shell(&fp), ProbeShellDecision::SkipRepeat);
+        assert_eq!(g.shell_rounds(), 1);
+    }
+
+    #[test]
+    fn policy_deny_does_not_consume_shell_round() {
+        assert!(!shell_output_counts_as_round(
+            "[policy_deny] command not in allowlist"
+        ));
+        assert!(!shell_output_counts_as_round(REPEAT_PROBE_NOTICE));
+        assert!(!shell_output_counts_as_round(SHELL_ROUND_CAP_NOTICE));
+        assert!(shell_output_counts_as_round("xray.service active"));
+        let mut g = HopProbeGovernor::new();
+        for i in 0..4 {
+            let fp = tool_probe_fingerprint("shell", &json!({"command": format!("denied {i}")}));
+            assert_eq!(g.decide_shell(&fp), ProbeShellDecision::Run);
+            // deny / skip: do not record
+        }
+        let fp = tool_probe_fingerprint("shell", &json!({"command": "ssh piubt true"}));
+        assert_eq!(g.decide_shell(&fp), ProbeShellDecision::Run);
+        g.record_executed_round();
+        assert_eq!(g.shell_rounds(), 1);
+    }
+
+    #[test]
+    fn retract_unexecuted_allows_retry_after_deny() {
+        let mut g = HopProbeGovernor::new();
+        let fp = tool_probe_fingerprint("shell", &json!({"command": "ssh piubt true"}));
+        assert_eq!(g.decide_shell(&fp), ProbeShellDecision::Run);
+        g.retract_unexecuted(&fp);
+        assert_eq!(g.decide_shell(&fp), ProbeShellDecision::Run);
+        g.record_executed_round();
+        assert_eq!(g.shell_rounds(), 1);
         assert_eq!(g.decide_shell(&fp), ProbeShellDecision::SkipRepeat);
     }
 }

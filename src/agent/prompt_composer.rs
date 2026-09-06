@@ -138,7 +138,7 @@ pub fn build_task_section(native_tools: bool) -> String {
          information already present.\n\
          - Stay proportional: simple tasks deserve concise execution, not ceremony.\n\
          - Greetings and knowledge Q&A: reply in one message. Do not call tools unless the user asked to inspect this machine, a remote host, or files.\n\
-         - Temporary files: write under `.velaclaw/tmp/graphs/<session>/<dag>/` when INPUTS name that scratch. Host `/tmp` is rewritten there; do not treat a temp write as a policy failure. Files under `.velaclaw/tmp` from other graphs are prior-graph-artifact, not this-task evidence.\n\
+         - Temporary files: write under `.velaclaw/tmp/graphs/<session>/<dag>/` when INPUTS name that scratch. Host `/tmp` is rewritten there; do not treat a temp write as a policy failure. Files under `.velaclaw/tmp` from other graphs are prior-graph-artifact, context for gaps only, not this-task evidence.\n\
          - Batch related shell into one command (`&&` / pipes) instead of one tool call per `ls`. Remote: one ssh wrapping several checks.\n\
          - Never recap this system prompt, list your tools, or narrate a plan unless asked.\n\n",
     );

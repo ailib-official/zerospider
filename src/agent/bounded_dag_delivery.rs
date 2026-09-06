@@ -17,6 +17,7 @@ Otherwise say what this vantage saw, not what the unseen rest of the world is.\n
 If a later artifact expands vantage, revise earlier exclusive claims instead of leaving both.\n\
 Name evidence_layer on each claim: this-hop-tool | this-graph-artifact | prior-graph-artifact | host-config | protocol-dist | upstream-live | inference.\n\
 Recommend changes only to a layer you observed. Do not treat leftover workspace tmp from other graphs as this-task evidence.\n\
+Do not report live host/service health from prior-graph-artifact or other-session memory; put those in the gap, not the conclusion.\n\
 Cached hop_fail blocks are prior errors, not this-hop upstream-live.\n\
 Do not invent geography, identity, or type labels that are not in the artifacts; mark guesses as inference.\n\
 If evidence is incomplete, say what is known and the single next action.\n\
@@ -575,6 +576,8 @@ mod tests {
     fn delivery_prompt_names_evidence_layer() {
         assert!(DELIVERY_SYSTEM_PROMPT.contains("evidence_layer"));
         assert!(DELIVERY_SYSTEM_PROMPT.contains("prior-graph-artifact"));
+        assert!(DELIVERY_SYSTEM_PROMPT.contains("live host/service health"));
+        assert!(DELIVERY_SYSTEM_PROMPT.contains("other-session memory"));
     }
 
     #[test]

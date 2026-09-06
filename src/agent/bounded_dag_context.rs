@@ -270,7 +270,7 @@ pub fn scratch_retrieve_text(workspace: &Path, session_id: &str, dag_id: &str) -
         sanitize_id_token(session_id)
     ));
     let mut lines = vec![format!(
-        "[this-graph-artifact scratch={current}]\nWrite temp files only under this directory. Do not treat other tmp files as this-task evidence."
+        "[this-graph-artifact scratch={current}]\nWrite temp files only under this directory. Do not treat other tmp files as this-task evidence. prior-graph-artifact listings below are context for gaps only — live USER TASK needs this-hop-tool."
     )];
     if let Ok(rd) = std::fs::read_dir(&session_root) {
         for ent in rd.flatten() {
@@ -280,7 +280,7 @@ pub fn scratch_retrieve_text(workspace: &Path, session_id: &str, dag_id: &str) -
                 continue;
             }
             lines.push(format!(
-                "[prior-graph-artifact scratch={}/graphs/{session_seg}/{name}]",
+                "[prior-graph-artifact scratch={}/graphs/{session_seg}/{name}] context-only; do not copy findings into this hop",
                 crate::security::policy::SCRATCH_REL,
                 session_seg = sanitize_id_token(session_id)
             ));
@@ -655,6 +655,10 @@ mod tests {
         assert!(text.contains("run2"), "{text}");
         assert!(!text.contains("foreign"), "{text}");
         assert!(!text.contains("other-session"), "{text}");
+        assert!(
+            text.contains("context-only") || text.contains("context for gaps"),
+            "{text}"
+        );
     }
 
     #[test]
