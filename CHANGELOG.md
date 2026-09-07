@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-08
+
 ### Added
 
 - **Hint peer fallback (VL-NA-021 / VL-NA-022):** `[agent].hint_peer_fallback` (dist default **off**) retries `[[model_routes]].fallbacks` after micro-retry. Switchable error **classes**: unavailable (410/EOL, `model_not_found`, vendor HTTP 404 Function Not Found) and quota (429/402). DNS/transport and workspace file-not-found do not switch. Max 5 attempts / 3 cross-provider; success pins the hint and blacklists the failed id.
