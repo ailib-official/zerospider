@@ -1678,20 +1678,21 @@ async fn bounded_dag_writeback_and_node_contact() {
         6,
         "first hop DAG + 3 work + 2 mid observe (last hop skips observe); got {used:?}"
     );
+    let session = crate::config::DEFAULT_PROTOCOL_MODEL_ID;
     assert_eq!(
         used[1],
-        "hint:code".to_string(),
-        "locate follows Contact; got {used:?}"
+        session.to_string(),
+        "locate uses session default; got {used:?}"
     );
     assert_eq!(
         used[3],
-        "hint:code".to_string(),
-        "patch follows Contact; got {used:?}"
+        session.to_string(),
+        "patch uses session default; got {used:?}"
     );
     assert_eq!(
         used[5],
-        "hint:fast".to_string(),
-        "verify follows Contact; got {used:?}"
+        session.to_string(),
+        "verify uses session default; got {used:?}"
     );
 }
 
