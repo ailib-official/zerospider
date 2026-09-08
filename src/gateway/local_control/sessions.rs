@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
 /// After this many user turns, request a one-shot LLM title refresh.
-pub const TITLE_REFINE_AFTER_USER_TURNS: usize = 3;
+pub const TITLE_REFINE_AFTER_USER_TURNS: usize = 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ChatSessionSummary {
@@ -412,7 +412,7 @@ mod tests {
             .append_messages(&created.id, &[user("hello")], Some("provider/model"))
             .await
             .unwrap();
-        assert!(!result.needs_title_refine);
+        assert!(result.needs_title_refine);
 
         let updated = store.get(&created.id).await.unwrap().unwrap();
         assert_eq!(updated.messages.len(), 1);
@@ -423,7 +423,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn signals_refine_after_three_user_turns() {
+    async fn signals_refine_after_first_user_turn() {
         let dir = tempfile::tempdir().unwrap();
         let store = ChatSessionStore::new(dir.path());
         let created = store.create(None, None).await.unwrap();
@@ -432,20 +432,8 @@ mod tests {
             .append_messages(&created.id, &[user("turn-1"), assistant("ok")], None)
             .await
             .unwrap();
-        assert!(!r1.needs_title_refine);
-
-        let r2 = store
-            .append_messages(&created.id, &[user("turn-2"), assistant("ok")], None)
-            .await
-            .unwrap();
-        assert!(!r2.needs_title_refine);
-
-        let r3 = store
-            .append_messages(&created.id, &[user("turn-3"), assistant("ok")], None)
-            .await
-            .unwrap();
-        assert!(r3.needs_title_refine);
-        assert_eq!(r3.user_turns, 3);
+        assert!(r1.needs_title_refine);
+        assert_eq!(r1.user_turns, 1);
 
         store
             .set_refined_title(&created.id, "refined-title")

@@ -98,6 +98,10 @@ pub(crate) struct SoftFailLoopCtx<'a> {
     pub surface: velaclaw_agent_runtime::SoftFailSurface,
     /// Logical model ids from `[[model_routes]]` (capability catalog, not cost order).
     pub peer_logical_ids: &'a [String],
+    /// Route table used to treat `hint:code` and its physical model as the same peer.
+    pub model_routes: &'a [crate::config::ModelRouteConfig],
+    /// Web/CLI session pick (must not be skipped merely because hop model is `hint:…`).
+    pub session_model: Option<&'a str>,
     /// Shared per-node probe governor (DAG hops). None → local to this loop call.
     pub probe: Option<&'a std::sync::Mutex<crate::agent::probe_dedup::HopProbeGovernor>>,
 }
@@ -498,7 +502,12 @@ pub(crate) async fn run_tool_call_loop(
             } else {
                 peers
             };
-            if let Some(peer) = select_peer_continue_model(&active_model, &peers) {
+            if let Some(peer) = select_peer_continue_model(
+                &active_model,
+                &peers,
+                soft_fail.map(|c| c.model_routes).unwrap_or(&[]),
+                soft_fail.and_then(|c| c.session_model),
+            ) {
                 peer_continue_used = true;
                 tracing::info!(
                     target: "velaclaw::agent",
@@ -708,26 +717,48 @@ pub(crate) async fn run_tool_call_loop(
     anyhow::bail!("Agent exceeded maximum tool iterations ({max_iterations})")
 }
 
-/// Catalog logical ids from `[[model_routes]]` (not priced Decide fallbacks).
-pub(crate) fn logical_ids_from_config(config: &Config) -> Vec<String> {
-    config
-        .model_routes
-        .iter()
-        .map(|r| {
-            if r.model.contains('/') {
-                r.model.clone()
-            } else {
-                format!("{}/{}", r.provider, r.model)
-            }
-        })
-        .collect()
+/// Catalog logical ids from `[[model_routes]]` including same-hint `fallbacks`.
+pub(crate) fn logical_ids_from_routes(routes: &[crate::config::ModelRouteConfig]) -> Vec<String> {
+    let mut ids = Vec::new();
+    let mut push = |provider: &str, model: &str| {
+        let id = crate::protocol_registry::compose_logical_model_id(provider, model);
+        if !id.is_empty() && !ids.iter().any(|x: &String| x.eq_ignore_ascii_case(&id)) {
+            ids.push(id);
+        }
+    };
+    for route in routes {
+        push(&route.provider, &route.model);
+        for peer in &route.fallbacks {
+            push(&peer.provider, &peer.model);
+        }
+    }
+    ids
 }
 
-/// First remaining catalog id, sorted by name — capability list, not cost.
-pub(crate) fn select_peer_continue_model(current: &str, peers: &[String]) -> Option<String> {
+/// Catalog logical ids from `[[model_routes]]` (not priced Decide fallbacks).
+pub(crate) fn logical_ids_from_config(config: &Config) -> Vec<String> {
+    logical_ids_from_routes(&config.model_routes)
+}
+
+/// First remaining catalog id that is not the same physical model, preferring the session pick.
+pub(crate) fn select_peer_continue_model(
+    current: &str,
+    peers: &[String],
+    routes: &[crate::config::ModelRouteConfig],
+    session_model: Option<&str>,
+) -> Option<String> {
+    let cur_key = crate::protocol_registry::physical_route_key(current, routes);
+    if let Some(session) = session_model.map(str::trim).filter(|s| !s.is_empty()) {
+        let session_key = crate::protocol_registry::physical_route_key(session, routes);
+        if session_key != cur_key {
+            return Some(session.to_string());
+        }
+    }
     let mut ids: Vec<&String> = peers
         .iter()
-        .filter(|id| !id.is_empty() && id.as_str() != current)
+        .filter(|id| {
+            !id.is_empty() && crate::protocol_registry::physical_route_key(id, routes) != cur_key
+        })
         .collect();
     ids.sort_unstable();
     ids.into_iter().next().cloned()
@@ -956,12 +987,64 @@ mod peer_continue_tests {
     fn select_peer_skips_current_and_sorts_lexically() {
         let peers = vec!["zeta/m".into(), "alpha/m".into(), "cur/m".into()];
         assert_eq!(
-            select_peer_continue_model("cur/m", &peers).as_deref(),
+            select_peer_continue_model("cur/m", &peers, &[], None).as_deref(),
             Some("alpha/m")
         );
         assert_eq!(
-            select_peer_continue_model("only", &[String::from("only")]),
+            select_peer_continue_model("only", &[String::from("only")], &[], None),
             None
+        );
+    }
+
+    #[test]
+    fn select_peer_skips_hint_equivalent_and_prefers_session_pick() {
+        let routes = [crate::config::ModelRouteConfig {
+            hint: "code".into(),
+            provider: "deepseek/deepseek-v4-flash".into(),
+            model: "deepseek-v4-flash".into(),
+            api_key: None,
+            fallbacks: Vec::new(),
+        }];
+        let peers = vec![
+            "deepseek/deepseek-v4-flash/deepseek-v4-flash".into(),
+            "openai/gpt-oss-20b".into(),
+        ];
+        assert_eq!(
+            select_peer_continue_model("hint:code", &peers, &routes, None).as_deref(),
+            Some("openai/gpt-oss-20b")
+        );
+        assert_eq!(
+            select_peer_continue_model(
+                "hint:code",
+                &peers,
+                &routes,
+                Some("nvidia/nemotron-3-ultra-550b-a55b")
+            )
+            .as_deref(),
+            Some("nvidia/nemotron-3-ultra-550b-a55b")
+        );
+    }
+
+    #[test]
+    fn logical_ids_include_route_fallbacks() {
+        let routes = [crate::config::ModelRouteConfig {
+            hint: "code".into(),
+            provider: "deepseek".into(),
+            model: "deepseek-v4-flash".into(),
+            api_key: None,
+            fallbacks: vec![crate::config::ModelRoutePeerConfig {
+                provider: "nvidia".into(),
+                model: "nemotron-3-ultra-550b-a55b".into(),
+            }],
+        }];
+        let ids = super::logical_ids_from_routes(&routes);
+        assert!(ids.iter().any(|id| id.contains("deepseek-v4-flash")));
+        assert!(ids
+            .iter()
+            .any(|id| id.contains("nemotron-3-ultra-550b-a55b")));
+        assert_eq!(
+            select_peer_continue_model("hint:code", &ids, &routes, None).as_deref(),
+            Some("nvidia/nemotron-3-ultra-550b-a55b")
         );
     }
 }

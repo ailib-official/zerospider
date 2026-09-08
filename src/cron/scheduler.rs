@@ -175,7 +175,7 @@ async fn run_agent_job(
 
     let run_result = match job.session_target {
         SessionTarget::Main | SessionTarget::Isolated => {
-            crate::agent::run(
+            Box::pin(crate::agent::run(
                 config.clone(),
                 Some(prefixed_prompt),
                 None,
@@ -187,7 +187,7 @@ async fn run_agent_job(
                 crate::agent::AgentRunOpts::phases(&[
                     crate::agent::prompt_composer::PromptPhase::Cron,
                 ]),
-            )
+            ))
             .await
         }
     };

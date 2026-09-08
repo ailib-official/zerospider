@@ -453,6 +453,7 @@ pub async fn start_channels(config: Config) -> Result<()> {
         system_prompt: Arc::new(system_prompt),
         model: Arc::new(model.clone()),
         peer_logical_ids: Arc::new(crate::agent::loop_::logical_ids_from_config(&config)),
+        model_routes: Arc::new(config.model_routes.clone()),
         temperature,
         auto_save_memory: config.memory.auto_save,
         max_tool_iterations: config.agent.max_tool_iterations,

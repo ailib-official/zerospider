@@ -396,6 +396,39 @@ pub fn resolve_route_logical_model(
     raw.to_string()
 }
 
+fn route_row_matches_raw(raw: &str, provider: &str, model: &str) -> bool {
+    let logical = compose_logical_model_id(provider, model);
+    raw.eq_ignore_ascii_case(logical.trim()) || raw.eq_ignore_ascii_case(model.trim())
+}
+
+/// Stable logical id so `hint:code` and its route / fallback peers compare equal.
+#[must_use]
+pub fn physical_route_key(
+    model_or_hint: &str,
+    routes: &[crate::config::ModelRouteConfig],
+) -> String {
+    let raw = model_or_hint.trim();
+    if let Some(hint) = raw.strip_prefix("hint:") {
+        if let Some(route) = routes
+            .iter()
+            .find(|r| r.hint.eq_ignore_ascii_case(hint.trim()))
+        {
+            return compose_logical_model_id(&route.provider, &route.model);
+        }
+    }
+    for route in routes {
+        if route_row_matches_raw(raw, &route.provider, &route.model) {
+            return compose_logical_model_id(&route.provider, &route.model);
+        }
+        for peer in &route.fallbacks {
+            if route_row_matches_raw(raw, &peer.provider, &peer.model) {
+                return compose_logical_model_id(&peer.provider, &peer.model);
+            }
+        }
+    }
+    raw.to_string()
+}
+
 /// Protocol `context_window` for this hop (`hint:` resolved via `[[model_routes]]`).
 #[must_use]
 pub fn lookup_hop_context_window(
@@ -887,6 +920,14 @@ endpoint:
         assert_eq!(
             resolve_route_logical_model("hint:unknown", &routes),
             "hint:unknown"
+        );
+        assert_eq!(
+            physical_route_key("hint:code", &routes),
+            physical_route_key("deepseek/deepseek-v4-flash", &routes)
+        );
+        assert_ne!(
+            physical_route_key("deepseek", &routes),
+            physical_route_key("hint:code", &routes)
         );
     }
 

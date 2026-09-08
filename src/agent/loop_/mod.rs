@@ -290,6 +290,7 @@ pub async fn run(
         .iter()
         .map(|route| route.hint.clone())
         .collect();
+    let catalog_peers = logical_ids_from_config(&config);
 
     observer.record_event(&ObserverEvent::AgentStart {
         provider: model_name
@@ -828,7 +829,9 @@ pub async fn run(
                                         config: Some(&config),
                                         host_decide: None,
                                         surface: velaclaw_agent_runtime::SoftFailSurface::Cli,
-                                        peer_logical_ids: &[],
+                                        peer_logical_ids: &catalog_peers,
+                                        model_routes: &config.model_routes,
+                                        session_model: Some(model_name.as_str()),
                                         probe: Some(probe_cell.as_ref()),
                                     }),
                                     Some(&cli_gate_extras),
@@ -940,6 +943,11 @@ pub async fn run(
                                     );
                                 }
                                 index += 1;
+                                if crate::agent::bounded_dag_delivery::hop_body_closes_graph(
+                                    &last_body,
+                                ) {
+                                    break;
+                                }
                             }
                             let _ = crate::agent::bounded_dag_live::clear_dag_fail(
                                 mem.as_ref(),
@@ -1015,7 +1023,9 @@ pub async fn run(
                                 config: Some(&config),
                                 host_decide: None,
                                 surface: velaclaw_agent_runtime::SoftFailSurface::Cli,
-                                peer_logical_ids: &[],
+                                peer_logical_ids: &catalog_peers,
+                                model_routes: &config.model_routes,
+                                session_model: Some(turn_model.as_str()),
                                 probe: None,
                             }),
                             Some(&cli_gate_extras),
@@ -1052,7 +1062,9 @@ pub async fn run(
                         config: Some(&config),
                         host_decide: None,
                         surface: velaclaw_agent_runtime::SoftFailSurface::Cli,
-                        peer_logical_ids: &[],
+                        peer_logical_ids: &catalog_peers,
+                        model_routes: &config.model_routes,
+                        session_model: Some(turn_model.as_str()),
                         probe: None,
                     }),
                     Some(&cli_gate_extras),
@@ -1594,7 +1606,9 @@ pub async fn run(
                                         config: Some(&config),
                                         host_decide: None,
                                         surface: velaclaw_agent_runtime::SoftFailSurface::Cli,
-                                        peer_logical_ids: &[],
+                                        peer_logical_ids: &catalog_peers,
+                                        model_routes: &config.model_routes,
+                                        session_model: Some(session_model.as_str()),
                                         probe: Some(probe_cell.as_ref()),
                                     }),
                                     Some(&cli_gate_extras),
@@ -1748,6 +1762,11 @@ pub async fn run(
                                     );
                                 }
                                 index += 1;
+                                if crate::agent::bounded_dag_delivery::hop_body_closes_graph(
+                                    &last_body,
+                                ) {
+                                    break;
+                                }
                             }
                             let _ = crate::agent::bounded_dag_live::clear_dag_fail(
                                 mem.as_ref(),
@@ -1821,8 +1840,10 @@ pub async fn run(
                                     config: Some(&config),
                                     host_decide: None,
                                     surface: velaclaw_agent_runtime::SoftFailSurface::Cli,
-                                    peer_logical_ids: &[],
-                                        probe: None,
+                                    peer_logical_ids: &catalog_peers,
+                                    model_routes: &config.model_routes,
+                                    session_model: Some(session_model.as_str()),
+                                    probe: None,
                                 }),
                                 Some(&cli_gate_extras),
                             )
@@ -1860,7 +1881,9 @@ pub async fn run(
                             config: Some(&config),
                             host_decide: None,
                             surface: velaclaw_agent_runtime::SoftFailSurface::Cli,
-                            peer_logical_ids: &[],
+                            peer_logical_ids: &catalog_peers,
+                            model_routes: &config.model_routes,
+                            session_model: Some(session_model.as_str()),
                             probe: None,
                         }),
                         Some(&cli_gate_extras),

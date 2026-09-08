@@ -41,6 +41,7 @@ pub struct Agent {
     classification_config: crate::config::QueryClassificationConfig,
     available_hints: Vec<String>,
     peer_logical_ids: Vec<String>,
+    model_routes: Vec<crate::config::ModelRouteConfig>,
     security: PolicyHandle,
     gateway_approval: Option<(ApprovalManager, Arc<ApprovalHub>)>,
     /// Shared attach slot for `request_human_input` (same Arc as the tool).
@@ -92,6 +93,7 @@ pub struct AgentBuilder {
     classification_config: Option<crate::config::QueryClassificationConfig>,
     available_hints: Option<Vec<String>>,
     peer_logical_ids: Option<Vec<String>>,
+    model_routes: Option<Vec<crate::config::ModelRouteConfig>>,
     security: Option<PolicyHandle>,
     human_input_attach: Option<HumanInputAttach>,
     #[cfg(feature = "ai-protocol")]
@@ -124,6 +126,7 @@ impl AgentBuilder {
             classification_config: None,
             available_hints: None,
             peer_logical_ids: None,
+            model_routes: None,
             security: None,
             human_input_attach: None,
             #[cfg(feature = "ai-protocol")]
@@ -236,6 +239,11 @@ impl AgentBuilder {
         self
     }
 
+    pub fn model_routes(mut self, model_routes: Vec<crate::config::ModelRouteConfig>) -> Self {
+        self.model_routes = Some(model_routes);
+        self
+    }
+
     pub fn security(mut self, security: PolicyHandle) -> Self {
         self.security = Some(security);
         self
@@ -315,6 +323,7 @@ impl AgentBuilder {
             classification_config: self.classification_config.unwrap_or_default(),
             available_hints: self.available_hints.unwrap_or_default(),
             peer_logical_ids: self.peer_logical_ids.unwrap_or_default(),
+            model_routes: self.model_routes.unwrap_or_default(),
             security: self
                 .security
                 .ok_or_else(|| anyhow::anyhow!("security is required"))?,
@@ -527,6 +536,7 @@ impl Agent {
             .classification_config(config.query_classification.clone())
             .available_hints(available_hints)
             .peer_logical_ids(crate::agent::loop_::logical_ids_from_config(config))
+            .model_routes(config.model_routes.clone())
             .identity_config(config.identity.clone())
             .skills(crate::skills::load_skills_with_config(
                 &config.workspace_dir,
@@ -892,6 +902,14 @@ impl Agent {
                 self.invoke_tool_loop_resolved_with(self.model_name.clone(), true)
                     .await?
             };
+            if crate::agent::bounded_dag_delivery::hop_body_closes_graph(&text) {
+                let visible =
+                    crate::agent::bounded_dag_delivery::ensure_user_visible(user_message, &text);
+                self.history
+                    .push(ConversationMessage::Chat(ChatMessage::assistant(&visible)));
+                self.prepare_history_after_turn().await?;
+                return Ok(visible);
+            }
             let verdict = observe_turn_outcome(
                 self.provider.as_ref(),
                 &self.model_name,
@@ -1213,7 +1231,9 @@ impl Agent {
                         ),
                     );
                 }
-                if crate::agent::bounded_dag_delivery::last_hop_ends_graph(remaining) {
+                if crate::agent::bounded_dag_delivery::last_hop_ends_graph(remaining)
+                    || crate::agent::bounded_dag_delivery::hop_body_closes_graph(&last_body)
+                {
                     let _ = crate::agent::bounded_dag_live::clear_dag_fail(
                         self.memory.as_ref(),
                         self.session_id.as_str(),
@@ -1411,6 +1431,11 @@ impl Agent {
             host_decide: self.host_decide_host.as_ref(),
             surface: velaclaw_agent_runtime::SoftFailSurface::Web,
             peer_logical_ids: &self.peer_logical_ids,
+            model_routes: self.model_routes.as_slice(),
+            session_model: self
+                .explicit_model
+                .as_deref()
+                .or(Some(self.model_name.as_str())),
             probe: self.current_hop_probe.as_ref().map(|c| c.as_ref()),
         };
 
