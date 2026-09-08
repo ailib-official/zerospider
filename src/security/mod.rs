@@ -54,6 +54,21 @@ pub use secrets::SecretStore;
 #[allow(unused_imports)]
 pub use traits::{FailClosedSandbox, NoopSandbox, Sandbox};
 
+/// Mask GitHub PAT / common token literals so they never land in receipts or policy errors.
+pub fn redact_secret_literals(input: &str) -> String {
+    static PAT: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let re = PAT.get_or_init(|| {
+        regex::Regex::new(
+            r"(?x)
+            (?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}
+            | github_pat_[A-Za-z0-9_]{20,}
+            ",
+        )
+        .expect("token literal regex")
+    });
+    re.replace_all(input, "[REDACTED_TOKEN]").into_owned()
+}
+
 /// Redact sensitive values for safe logging. Shows first 4 chars + "***" suffix.
 /// This function intentionally breaks the data-flow taint chain for static analysis.
 pub fn redact(value: &str) -> String {
@@ -94,5 +109,14 @@ mod tests {
         assert_eq!(redact("ab"), "***");
         assert_eq!(redact(""), "***");
         assert_eq!(redact("12345"), "1234***");
+    }
+
+    #[test]
+    fn redact_secret_literals_masks_github_pats() {
+        let raw = "token ghp_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAABB and github_pat_11AAAAAAA0BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB";
+        let out = redact_secret_literals(raw);
+        assert!(!out.contains("ghp_A"));
+        assert!(!out.contains("github_pat_11"));
+        assert!(out.contains("[REDACTED_TOKEN]"));
     }
 }

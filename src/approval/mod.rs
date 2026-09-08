@@ -281,11 +281,10 @@ impl ApprovalManager {
         }
 
         if decision == ApprovalResponse::Always {
-            let persist_secrets = args
-                .get("command")
-                .and_then(|v| v.as_str())
+            let persist_secrets = velaclaw_agent_runtime::shell_command_from_args(tool_name, args)
                 .map_or(true, |c| {
                     !crate::security::policy::command_touches_secret_material(c)
+                        && !crate::security::policy::command_invokes_posix_script(c)
                 });
             if persist_secrets {
                 let mut allowlist = self.session_allowlist.lock();

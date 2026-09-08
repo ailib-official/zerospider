@@ -61,7 +61,7 @@ impl ToolReceiptLog {
             timestamp: Utc::now(),
             tool: tool.to_string(),
             decision,
-            command: truncate_command(command),
+            command: truncate_command(&crate::security::redact_secret_literals(command)),
             sandbox: sandbox.to_string(),
             human_approved,
         };
@@ -114,5 +114,24 @@ mod tests {
         let t = truncate_command(&long);
         assert!(t.chars().count() <= MAX_COMMAND_CHARS + 1);
         assert!(t.ends_with('…'));
+    }
+
+    #[test]
+    fn receipts_redact_github_pat_literals() {
+        let tmp = tempfile::tempdir().unwrap();
+        let log = ToolReceiptLog::in_workspace(tmp.path());
+        let tok = format!("ghp_{}", "B".repeat(36));
+        log.record(
+            "shell",
+            ReceiptDecision::Deny,
+            &format!("echo {tok}"),
+            "gate",
+            false,
+        )
+        .unwrap();
+        let body = std::fs::read_to_string(log.path()).unwrap();
+        assert!(!body.contains(&tok), "{body}");
+        assert!(body.contains("[REDACTED_TOKEN]"));
+        assert!(body.contains("\"decision\":\"deny\""));
     }
 }

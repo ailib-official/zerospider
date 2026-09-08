@@ -71,9 +71,18 @@ impl ShellTool {
         }
     }
 
-    /// Skip OS sandbox for this invocation: Policy B, or Once elevation after sandbox deny.
-    fn skip_os_sandbox(&self, ctx: &ToolExecutionContext) -> bool {
-        ctx.human_shell_approved && (self.security.escape_on_approval() || ctx.sandbox_elevated)
+    /// Skip OS sandbox: privilege Once, elevation retry, or credential-path Once (VL-SEC-013).
+    fn skip_os_sandbox(&self, ctx: &ToolExecutionContext, command: &str) -> bool {
+        if !ctx.human_shell_approved {
+            return false;
+        }
+        if self.security.escape_on_approval() || ctx.sandbox_elevated {
+            return true;
+        }
+        crate::security::policy::command_touches_secret_material_in(
+            command,
+            Some(&self.security.workspace_dir()),
+        )
     }
 }
 
@@ -228,7 +237,7 @@ impl Tool for ShellTool {
             &self.security.workspace_dir(),
         );
 
-        let skip_sandbox = self.skip_os_sandbox(ctx);
+        let skip_sandbox = self.skip_os_sandbox(ctx, command);
         let sandbox_name = if skip_sandbox {
             "none(approved-escape)"
         } else {

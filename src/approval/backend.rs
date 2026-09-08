@@ -262,11 +262,14 @@ impl ShellPolicyHook for PolicyHandleShellHook {
         arguments: &serde_json::Value,
         human_approved: bool,
     ) -> Result<(), String> {
-        let Some(command) = shell_command_from_args(tool_name, arguments) else {
+        let Some(payload) = shell_command_from_args(tool_name, arguments) else {
             return Ok(());
         };
+        if matches!(tool_name, "file_read" | "file_write") {
+            return self.0.validate_secret_path_access(payload, human_approved);
+        }
         self.0
-            .validate_command_execution(command, human_approved)
+            .validate_command_execution(payload, human_approved)
             .map(|_| ())
     }
 }
@@ -281,11 +284,14 @@ impl ShellPolicyHook for SecurityPolicyShellHook<'_> {
         arguments: &serde_json::Value,
         human_approved: bool,
     ) -> Result<(), String> {
-        let Some(command) = shell_command_from_args(tool_name, arguments) else {
+        let Some(payload) = shell_command_from_args(tool_name, arguments) else {
             return Ok(());
         };
+        if matches!(tool_name, "file_read" | "file_write") {
+            return self.0.validate_secret_path_access(payload, human_approved);
+        }
         self.0
-            .validate_command_execution(command, human_approved)
+            .validate_command_execution(payload, human_approved)
             .map(|_| ())
     }
 }

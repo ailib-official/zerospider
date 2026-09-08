@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Credential paths (VL-SEC-013):** secret detection covers argv tokens, workspace `bash`/`sh` script bodies, and `file_read`/`file_write` paths. Isolated **Ask** still uses ApprovalHub Once (sandbox escape for that invocation); unset **Deny** stays a hard block. Gate denials write `ReceiptDecision::Deny`. Tool output and receipts redact `ghp_` / `github_pat_` literals. Prefer daemon `gh` + `GH_TOKEN`; do not scan PAT lists.
+
 ## [1.3.0] - 2026-09-08
 
 ### Changed
