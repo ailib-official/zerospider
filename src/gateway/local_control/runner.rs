@@ -190,7 +190,7 @@ fn seed_prior_messages(agent: &mut Agent, messages: &[ChatMessageInput]) -> Resu
 ///
 /// Callers must not invoke this for cancelled turns (`TurnFinish::Cancelled`).
 ///
-/// After three user turns, schedules a **background** title completion (does not
+/// After the first persisted user turn, schedules a **background** title completion (does not
 /// block the chat `done` frame). Model preference: local (ollama / llamacpp /
 /// lmstudio) → `nvidia/nemotron-3-super-120b-a12b` → `nvidia/nemotron-mini-4b-instruct`.
 pub async fn persist_chat_turn(

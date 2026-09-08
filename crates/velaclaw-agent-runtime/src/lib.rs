@@ -39,10 +39,12 @@ pub use provider::{
 };
 pub use tool_format::{
     append_tool_format_exhausted_notice, host_decide_failover_announce, looks_like_model_retired,
-    looks_like_provider_limit, needs_tool_format_correction, parse_repaired_tool_calls,
-    provider_limit_user_message, provider_retired_user_message, repair_extract_system_prompt,
-    tool_format_correction_message, tool_format_recovery_message, truncate_repair_blob,
-    RepairedToolCall, SoftFailSurface, ToolFormatLadder, ToolFormatRecoveryStrategy,
+    looks_like_provider_limit, looks_like_tool_format_exhausted_notice,
+    needs_tool_format_correction, parse_repaired_tool_calls, provider_limit_user_message,
+    provider_retired_user_message, repair_extract_system_prompt,
+    strip_tool_format_exhausted_notice, tool_format_correction_message,
+    tool_format_recovery_message, truncate_repair_blob, RepairedToolCall, SoftFailSurface,
+    ToolFormatLadder, ToolFormatRecoveryStrategy,
 };
 pub use tool_ir::{
     append_unregistered_ir_notice, decode_unwrapped_ir, is_line_isolated_json_segment,

@@ -196,7 +196,7 @@ async fn run_heartbeat_worker(config: Config) -> Result<()> {
         for task in tasks {
             let prompt = format!("[Heartbeat Task] {task}");
             let temp = config.default_temperature;
-            if let Err(e) = crate::agent::run(
+            if let Err(e) = Box::pin(crate::agent::run(
                 config.clone(),
                 Some(prompt),
                 None,
@@ -208,7 +208,7 @@ async fn run_heartbeat_worker(config: Config) -> Result<()> {
                 crate::agent::AgentRunOpts::phases(&[
                     crate::agent::prompt_composer::PromptPhase::Heartbeat,
                 ]),
-            )
+            ))
             .await
             {
                 crate::health::mark_component_error("heartbeat", e.to_string());

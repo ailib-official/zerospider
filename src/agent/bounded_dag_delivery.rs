@@ -139,7 +139,7 @@ pub fn parlor_fallback(user_task: &str, internodal: &str) -> String {
         }
     }
     let visible = out.trim().to_string();
-    if looks_like_internodal_envelope(&visible) {
+    if visible.is_empty() || looks_like_internodal_envelope(&visible) {
         "任务已完成部分核查。请根据会话中的步骤记录确认下一步；详细信封未向操作者展示。".into()
     } else {
         visible
@@ -288,11 +288,24 @@ fn section_after(text: &str, headers: &[&str]) -> Option<String> {
 /// Hard gate: internodal skeleton never leaves as the chat body.
 #[must_use]
 pub fn ensure_user_visible(user_task: &str, body: &str) -> String {
-    let stripped = strip_internodal_suffix(body);
-    if looks_like_internodal_envelope(&stripped) {
+    let without_markup = crate::util::strip_tool_call_markup(body);
+    let without_notice =
+        if velaclaw_agent_runtime::looks_like_tool_format_exhausted_notice(&without_markup) {
+            velaclaw_agent_runtime::strip_tool_format_exhausted_notice(&without_markup)
+        } else {
+            without_markup
+        };
+    let stripped = strip_internodal_suffix(&without_notice);
+    if looks_like_internodal_envelope(&stripped)
+        || velaclaw_agent_runtime::looks_like_tool_format_exhausted_notice(&stripped)
+    {
         parlor_fallback(user_task, &stripped)
     } else if stripped.is_empty() {
-        parlor_fallback(user_task, body)
+        if velaclaw_agent_runtime::looks_like_tool_format_exhausted_notice(body) {
+            parlor_fallback(user_task, "")
+        } else {
+            parlor_fallback(user_task, body)
+        }
     } else {
         stripped
     }
@@ -471,6 +484,12 @@ pub fn should_observe_after_hop(remaining_nodes: usize) -> bool {
     remaining_nodes > 0
 }
 
+/// Tool-format recovery already failed: do not observe or start later hops.
+#[must_use]
+pub fn hop_body_closes_graph(last_body: &str) -> bool {
+    velaclaw_agent_runtime::looks_like_tool_format_exhausted_notice(last_body)
+}
+
 /// Last hop never replans the remaining chain, even if the body is prose.
 #[must_use]
 pub fn skip_replan_for_parlor(remaining_nodes: usize, _last_body: &str) -> bool {
@@ -497,23 +516,50 @@ pub async fn host_delivery(
     last_node_body: &str,
     prior_visible: &str,
 ) -> Result<String> {
-    let stripped = strip_internodal_suffix(last_node_body);
-    let body = if looks_like_internodal_envelope(&stripped) {
+    let exhausted = velaclaw_agent_runtime::looks_like_tool_format_exhausted_notice(last_node_body);
+    let stripped_notice = if exhausted {
+        velaclaw_agent_runtime::strip_tool_format_exhausted_notice(last_node_body)
+    } else {
+        last_node_body.to_string()
+    };
+    let evidence = if exhausted && stripped_notice.trim().is_empty() {
+        prior_visible
+    } else {
+        stripped_notice.as_str()
+    };
+    let stripped = strip_internodal_suffix(evidence);
+    let body = if looks_like_internodal_envelope(&stripped) || exhausted {
         match delivery_chat(
             provider,
             model,
             temperature,
             user_task,
-            &stripped,
+            if stripped.trim().is_empty() {
+                prior_visible
+            } else {
+                &stripped
+            },
             prior_visible,
         )
         .await
         {
-            Ok(text) if !text.trim().is_empty() && !looks_like_internodal_envelope(&text) => text,
-            Ok(_) | Err(_) => parlor_fallback(user_task, &stripped),
+            Ok(text)
+                if !text.trim().is_empty()
+                    && !looks_like_internodal_envelope(&text)
+                    && !velaclaw_agent_runtime::looks_like_tool_format_exhausted_notice(&text) =>
+            {
+                text
+            }
+            Ok(_) | Err(_) => {
+                if stripped.trim().is_empty() {
+                    parlor_fallback(user_task, prior_visible)
+                } else {
+                    parlor_fallback(user_task, &stripped)
+                }
+            }
         }
     } else {
-        last_node_body.to_string()
+        evidence.to_string()
     };
     let mut visible = finalize_operator_visible(user_task, &body);
     let cjk = crate::agent::bounded_dag_live::user_prefers_cjk(user_task);
@@ -591,6 +637,17 @@ mod tests {
         let out2 = ensure_user_visible("检查", no_heading);
         assert!(out2.contains("表格报告"));
         assert!(!out2.contains("verdict:"));
+        let notice = "VelaClaw notice: tool-format recovery exhausted for model `deepseek/deepseek-v4-flash`.";
+        let out3 = ensure_user_visible("升版", notice);
+        assert!(!out3
+            .to_ascii_lowercase()
+            .contains("tool-format recovery exhausted"));
+        let markup = "<tool_call>shell</tool_call>\nVelaClaw notice: tool-format recovery exhausted for model `x`.";
+        let out4 = ensure_user_visible("升版", markup);
+        assert!(!out4.contains("<tool_call>"));
+        assert!(!out4
+            .to_ascii_lowercase()
+            .contains("tool-format recovery exhausted"));
     }
 
     #[test]
@@ -613,6 +670,10 @@ mod tests {
         assert!(!last_hop_ends_graph(2));
         assert!(!should_observe_after_hop(0));
         assert!(should_observe_after_hop(1));
+        assert!(hop_body_closes_graph(
+            "VelaClaw notice: tool-format recovery exhausted for model `x`."
+        ));
+        assert!(!hop_body_closes_graph("done"));
         assert!(skip_replan_for_parlor(0, SMART_TUBE));
         assert!(skip_replan_for_parlor(0, "升级到 32.38s。"));
         assert!(!skip_replan_for_parlor(2, SMART_TUBE));

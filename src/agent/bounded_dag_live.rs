@@ -458,14 +458,21 @@ async fn observe_turn_outcome_timed(
     {
         Ok(result) => result,
         Err(_) => {
+            let exhausted =
+                velaclaw_agent_runtime::looks_like_tool_format_exhausted_notice(last_reply);
             tracing::warn!(
                 target: "bounded_dag_live",
                 node_id = node,
                 remaining_nodes,
                 node_count,
-                "observe timed out; fail-open"
+                exhausted,
+                "observe timed out"
             );
-            Ok(fail_closed)
+            if exhausted {
+                Ok(ObserveVerdict::Stop)
+            } else {
+                Ok(fail_closed)
+            }
         }
     }
 }
@@ -1879,6 +1886,25 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(verdict, ObserveVerdict::Continue);
+    }
+
+    #[tokio::test]
+    async fn observe_timeout_stops_when_hop_already_exhausted() {
+        let verdict = observe_turn_outcome_timed(
+            &HangPlanner,
+            "m",
+            0.0,
+            "hello",
+            "VelaClaw notice: tool-format recovery exhausted for model `x`.",
+            None,
+            2,
+            3,
+            ObserveVerdict::Continue,
+            std::time::Duration::from_millis(20),
+        )
+        .await
+        .unwrap();
+        assert_eq!(verdict, ObserveVerdict::Stop);
     }
 
     #[tokio::test]

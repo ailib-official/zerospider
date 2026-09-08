@@ -285,6 +285,27 @@ pub fn append_tool_format_exhausted_notice(
     }
 }
 
+/// True when the operator body is (or ends with) the host tool-format exhausted notice.
+#[must_use]
+pub fn looks_like_tool_format_exhausted_notice(text: &str) -> bool {
+    text.to_ascii_lowercase()
+        .contains("tool-format recovery exhausted")
+}
+
+/// Drop the host exhausted-notice suffix; keep any prose above it.
+#[must_use]
+pub fn strip_tool_format_exhausted_notice(text: &str) -> String {
+    const MARK: &str = "VelaClaw notice: tool-format recovery exhausted";
+    if let Some(i) = text.find(MARK) {
+        let prefix = text[..i].trim_end_matches(|c: char| c == '-' || c.is_whitespace());
+        return prefix.trim().to_string();
+    }
+    if looks_like_tool_format_exhausted_notice(text) {
+        return String::new();
+    }
+    text.to_string()
+}
+
 /// True when an error string looks like provider rate-limit / quota exhaustion.
 #[must_use]
 pub fn looks_like_provider_limit(err_msg: &str) -> bool {
@@ -436,6 +457,10 @@ mod tests {
         assert!(channel.contains("/models"));
         assert!(web.contains("model picker"));
         assert!(web.contains("openai/gpt-4o"));
+        let stripped = strip_tool_format_exhausted_notice(&out);
+        assert_eq!(stripped, "partial");
+        assert!(looks_like_tool_format_exhausted_notice(&out));
+        assert!(!looks_like_tool_format_exhausted_notice(&stripped));
     }
 
     #[test]

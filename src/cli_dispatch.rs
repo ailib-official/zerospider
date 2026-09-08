@@ -214,7 +214,7 @@ pub async fn dispatch_configured_command(command: Commands, config: Config) -> R
             } else {
                 velaclaw::agent::host_phase::HostPhase::Build
             };
-            agent::run(
+            Box::pin(agent::run(
                 config,
                 message,
                 provider,
@@ -229,7 +229,7 @@ pub async fn dispatch_configured_command(command: Commands, config: Config) -> R
                     chat_session_id: session_id,
                     persist_chat_session: true,
                 },
-            )
+            ))
             .await
             .map(|_| ())
         }
