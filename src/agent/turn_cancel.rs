@@ -19,7 +19,8 @@ pub enum TurnFinish<T> {
 }
 
 impl<T> TurnFinish<T> {
-    /// Persist an assistant reply only when the turn completed successfully.
+    /// Persist a successful internodal/parlor assistant body only on Completed.
+    /// Cancelled turns persist a separate `Stopped.` tombstone (VL-NA-043).
     #[must_use]
     pub fn should_persist_assistant(&self) -> bool {
         matches!(self, Self::Completed(_))

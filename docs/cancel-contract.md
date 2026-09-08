@@ -9,10 +9,10 @@ Runtime contract for **stopping an in-flight agent turn**. Implementation lives 
 | Outcome | Persist assistant text | User copy |
 |---|---|---|
 | **Completed** | Yes | Normal reply |
-| **Cancelled** (`ToolLoopCancelled`) | **No** | `Stopped.` |
+| **Cancelled** (`ToolLoopCancelled`) | User at turn start; assistant = `Stopped.` | `Stopped.` |
 | **Failed** | No | Error (CLI stderr / WS `error`) |
 
-Web Chat **Stop** and CLI **Esc Esc** both classify with `classify_turn_result`. Do not invent a second persist policy.
+Web Chat **Stop** and CLI **Esc Esc** both classify with `classify_turn_result`. Cancel also stores a DAG fail cursor (`fail_class=cancelled`) so the next message resumes remaining nodes instead of planning a postmortem graph.
 
 ## Surfaces
 

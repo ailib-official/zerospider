@@ -1,12 +1,13 @@
 //! Per-hop probe fingerprinting: skip repeat shells and script_vN ladders.
 //! 同一 hop 内跳过重复探测与 script_vN 梯子。
 
+use crate::agent::hop_stop::{policy_deny_class, HopClose};
 use serde_json::Value;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 pub const REPEAT_PROBE_NOTICE: &str = "Host skipped a repeat probe (same fingerprint as an earlier call this hop). Use INPUTS; compound remaining work or HANDOFF.";
 
-pub const SHELL_ROUND_CAP_NOTICE: &str = "Host capped this hop at four shell rounds. HANDOFF with current INPUTS; do not start script_v2/v3.";
+pub const SHELL_ROUND_CAP_NOTICE: &str = "Host capped this hop at four executed shell rounds. Finish this node's internodal envelope from current INPUTS; do not start script_v2/v3.";
 
 pub const MAX_SHELL_ROUNDS_PER_HOP: u32 = 4;
 
@@ -15,6 +16,8 @@ pub const MAX_SHELL_ROUNDS_PER_HOP: u32 = 4;
 pub struct HopProbeGovernor {
     seen: HashSet<String>,
     shell_rounds: u32,
+    policy_denies: HashMap<&'static str, u32>,
+    hop_close: HopClose,
     pub notices: Vec<String>,
 }
 
@@ -50,6 +53,7 @@ impl HopProbeGovernor {
     pub fn decide_shell(&mut self, fingerprint: &str) -> ProbeShellDecision {
         if self.shell_rounds >= MAX_SHELL_ROUNDS_PER_HOP {
             self.notices.push(SHELL_ROUND_CAP_NOTICE.to_string());
+            self.hop_close = HopClose::Cap;
             return ProbeShellDecision::Cap;
         }
         if self.seen.contains(fingerprint) {
@@ -62,6 +66,27 @@ impl HopProbeGovernor {
 
     pub fn drain_notices(&mut self) -> Vec<String> {
         std::mem::take(&mut self.notices)
+    }
+
+    /// Classify a shell tool result: policy-deny tally and hop close.
+    pub fn note_shell_output(&mut self, output: &str) {
+        if output.contains(SHELL_ROUND_CAP_NOTICE) {
+            self.hop_close = HopClose::Cap;
+            return;
+        }
+        let Some(class) = policy_deny_class(output) else {
+            return;
+        };
+        let n = self.policy_denies.entry(class).or_insert(0);
+        *n = n.saturating_add(1);
+        if *n >= 2 {
+            self.hop_close = HopClose::PolicyDeny;
+        }
+    }
+
+    #[must_use]
+    pub fn hop_close(&self) -> HopClose {
+        self.hop_close
     }
 }
 
@@ -158,7 +183,6 @@ pub fn strip_script_version(stem: &str) -> String {
 mod tests {
     use super::*;
     use serde_json::json;
-    use std::collections::HashSet;
 
     #[test]
     fn collapses_script_version_ladder() {
@@ -270,5 +294,29 @@ mod tests {
         g.record_executed_round();
         assert_eq!(g.shell_rounds(), 1);
         assert_eq!(g.decide_shell(&fp), ProbeShellDecision::SkipRepeat);
+    }
+
+    #[test]
+    fn cap_notice_does_not_teach_handoff() {
+        assert!(!SHELL_ROUND_CAP_NOTICE.contains("HANDOFF"));
+    }
+
+    #[test]
+    fn two_same_policy_denies_close_hop() {
+        let mut g = HopProbeGovernor::new();
+        g.note_shell_output("Command not allowed by security policy (not in allowed_commands).");
+        assert_eq!(g.hop_close(), HopClose::None);
+        g.note_shell_output(
+            "[policy_deny] Command not allowed by security policy (not in allowed_commands).",
+        );
+        assert_eq!(g.hop_close(), HopClose::PolicyDeny);
+    }
+
+    #[test]
+    fn unlike_policy_denies_do_not_close() {
+        let mut g = HopProbeGovernor::new();
+        g.note_shell_output("unsafe shell construct (injection, redirect, or dangerous args).");
+        g.note_shell_output("Command not allowed by security policy (not in allowed_commands).");
+        assert_eq!(g.hop_close(), HopClose::None);
     }
 }

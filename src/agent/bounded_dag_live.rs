@@ -15,7 +15,7 @@
 //! 有界 DAG live：首跳仅 chat_only 或线性图；1 节点开工具前再拆一次。
 
 use super::bounded_dag::{format_preview, linear_node_ids, load_bounded_dag};
-use super::bounded_dag_context::contact_for_node;
+use super::bounded_dag_context::contact_for_live_node;
 use super::candidate_dag::validate_candidate_dag_json;
 use super::dag_runner::{parse_dag_json, DagManifest, CODE_FIX_TEMPLATE_JSON};
 use super::host_phase::HostPhase;
@@ -617,6 +617,30 @@ pub struct DagFailCursor {
     pub fail_class: String,
 }
 
+#[must_use]
+pub fn cancelled_fail_cursor(node_id: &str, index: usize, dag_id: &str) -> DagFailCursor {
+    DagFailCursor {
+        node_id: node_id.to_string(),
+        index,
+        err: "cancelled".into(),
+        dag_id: dag_id.to_string(),
+        auto_replan_count: 0,
+        fail_class: crate::agent::hop_stop::FAIL_CLASS_CANCELLED.into(),
+    }
+}
+
+#[must_use]
+pub fn policy_deny_fail_cursor(node_id: &str, index: usize, dag_id: &str) -> DagFailCursor {
+    DagFailCursor {
+        node_id: node_id.to_string(),
+        index,
+        err: "repeated policy denials of the same class".into(),
+        dag_id: dag_id.to_string(),
+        auto_replan_count: 0,
+        fail_class: crate::agent::hop_stop::FAIL_CLASS_POLICY_DENY.into(),
+    }
+}
+
 /// Same-turn retry vs stop (VL-NA-024). Dist default off via config.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorkNodeFailDecision {
@@ -989,7 +1013,7 @@ pub fn dag_contact_labels(
         let Some(node) = by_id.get(id.as_str()) else {
             continue;
         };
-        let contact = contact_for_node(node, session_model, hints, None);
+        let contact = contact_for_live_node(node, session_model, hints, false);
         out.insert(id.clone(), provider.routed_model_label(&contact.model));
     }
     out
@@ -1051,14 +1075,14 @@ impl PlannedLiveDag {
         if default_model.is_empty() && available_hints.is_empty() {
             return out;
         }
-        out.push_str("\nContact (capability → route; planner stays on session default):\n");
+        out.push_str("\nContact (session picker on work hops; capability peer only after fail):\n");
         let by_id: std::collections::HashMap<&str, _> =
             self.dag.nodes.iter().map(|n| (n.id.as_str(), n)).collect();
         for id in &self.order {
             let Some(node) = by_id.get(id.as_str()) else {
                 continue;
             };
-            let contact = contact_for_node(node, default_model, available_hints, None);
+            let contact = contact_for_live_node(node, default_model, available_hints, false);
             let _ = writeln!(out, "- {}  {}", node.id, contact.observe_line());
         }
         out
@@ -1301,6 +1325,13 @@ pub async fn prepare_session_live_dag(
             let original = load_graph_user_task(mem, session_id)
                 .await?
                 .unwrap_or_else(|| user_task.to_string());
+            let override_task = repair_graph_task(&original, &fail.node_id, user_task);
+            if crate::agent::hop_stop::keep_remaining_without_replan(&fail.fail_class) {
+                stored.resume_from = fail.index.min(stored.order.len());
+                stored.graph_task_override = Some(override_task);
+                stored.source = "repair_keep";
+                return Ok(stored);
+            }
             let completed: Vec<String> = stored.order.iter().take(fail.index).cloned().collect();
             let repair_user = repair_planner_user_prompt(&original, &fail, &completed, user_task);
             let fallback = fallback_template_json(agent)?;
@@ -1312,7 +1343,6 @@ pub async fn prepare_session_live_dag(
                 &fallback,
             )
             .await?;
-            let override_task = repair_graph_task(&original, &fail.node_id, user_task);
             if remaining.used_fallback {
                 stored.resume_from = fail.index.min(stored.order.len());
                 stored.graph_task_override = Some(override_task);
@@ -1686,11 +1716,12 @@ mod tests {
     fn preview_lists_contact_for_hints() {
         let plan = resolve_planned_manifest(PAPER_JSON, CODE_FIX_TEMPLATE_JSON).unwrap();
         let text = plan.preview_with_contact(
-            "deepseek/deepseek-v4-flash",
+            "nvidia/nemotron-3-ultra-550b-a55b",
             &["document".into(), "fast".into()],
         );
-        assert!(text.contains("hint:document"), "{text}");
-        assert!(text.contains("hint:fast"), "{text}");
+        assert!(text.contains("nvidia/nemotron-3-ultra-550b-a55b"), "{text}");
+        assert!(!text.contains("hint:document"), "{text}");
+        assert!(!text.contains("hint:fast"), "{text}");
     }
 
     struct TwoShotPlanner {

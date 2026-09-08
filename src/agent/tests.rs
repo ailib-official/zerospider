@@ -1678,26 +1678,27 @@ async fn bounded_dag_writeback_and_node_contact() {
         6,
         "first hop DAG + 3 work + 2 mid observe (last hop skips observe); got {used:?}"
     );
+    let session = crate::config::DEFAULT_PROTOCOL_MODEL_ID;
     assert_eq!(
         used[1],
-        "hint:code".to_string(),
-        "locate follows Contact; got {used:?}"
+        session.to_string(),
+        "locate uses session default; got {used:?}"
     );
     assert_eq!(
         used[3],
-        "hint:code".to_string(),
-        "patch follows Contact; got {used:?}"
+        session.to_string(),
+        "patch uses session default; got {used:?}"
     );
     assert_eq!(
         used[5],
-        "hint:fast".to_string(),
-        "verify follows Contact; got {used:?}"
+        session.to_string(),
+        "verify uses session default; got {used:?}"
     );
 }
 
 #[cfg(feature = "ai-protocol")]
 #[tokio::test]
-async fn bounded_dag_session_picker_does_not_override_contact() {
+async fn bounded_dag_session_picker_runs_work_hops() {
     let provider = ScriptedProvider::new(vec![
         text_response(crate::agent::dag_runner::CODE_FIX_TEMPLATE_JSON),
         text_response("located"),
@@ -1723,18 +1724,25 @@ async fn bounded_dag_session_picker_does_not_override_contact() {
         .available_hints(vec!["fast".into(), "code".into()])
         .build()
         .unwrap();
-    agent.set_explicit_model(Some("deepseek/deepseek-v4-flash".into()));
+    agent.set_explicit_model(Some("nvidia/nemotron-3-ultra-550b-a55b".into()));
     agent.set_host_phase(crate::agent::host_phase::HostPhase::Build);
     let out = agent.turn("fix the compiler error").await.unwrap();
     assert!(out.contains("verified"), "{out}");
     assert!(!out.contains("contact model="), "{out}");
-    assert!(!out.contains("reason=explicit_user_pick"), "{out}");
     let used = models.lock().unwrap().clone();
     assert_eq!(
         used[1],
-        "hint:code".to_string(),
-        "work hops must follow Contact, not the session picker; got {used:?}"
+        "nvidia/nemotron-3-ultra-550b-a55b".to_string(),
+        "work hops must use the session picker; got {used:?}"
     );
-    assert_eq!(used[3], "hint:code".to_string(), "got {used:?}");
-    assert_eq!(used[5], "hint:fast".to_string(), "got {used:?}");
+    assert_eq!(
+        used[3],
+        "nvidia/nemotron-3-ultra-550b-a55b".to_string(),
+        "got {used:?}"
+    );
+    assert_eq!(
+        used[5],
+        "nvidia/nemotron-3-ultra-550b-a55b".to_string(),
+        "got {used:?}"
+    );
 }

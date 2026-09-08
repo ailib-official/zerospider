@@ -839,10 +839,12 @@ pub async fn run(
                                 .await
                                 {
                                     Ok(piece) => {
-                                        let notes = probe_cell
-                                            .lock()
-                                            .unwrap_or_else(|e| e.into_inner())
-                                            .drain_notices();
+                                        let (notes, close) = {
+                                            let mut g = probe_cell
+                                                .lock()
+                                                .unwrap_or_else(|e| e.into_inner());
+                                            (g.drain_notices(), g.hop_close())
+                                        };
                                         for note in notes {
                                             crate::agent::bounded_dag_delivery::print_operator_note(
                                                 &mut operator_prefix,
@@ -850,9 +852,42 @@ pub async fn run(
                                                 None,
                                             );
                                         }
+                                        if close == crate::agent::hop_stop::HopClose::PolicyDeny {
+                                            let _ = crate::agent::bounded_dag_live::store_dag_fail(
+                                                mem.as_ref(),
+                                                session_id.as_str(),
+                                                &crate::agent::bounded_dag_live::policy_deny_fail_cursor(
+                                                    &node.id, index, dag.id.as_str(),
+                                                ),
+                                            )
+                                            .await;
+                                            security.set_graph_scratch_rel(None);
+                                            crate::agent::bounded_dag_delivery::print_operator_note(
+                                                &mut operator_prefix,
+                                                &crate::agent::bounded_dag_live::format_work_node_stop(
+                                                    &msg,
+                                                    &node.id,
+                                                    "repeated policy denials of the same class",
+                                                    index + 1,
+                                                    node_count,
+                                                ),
+                                                None,
+                                            );
+                                            return Ok(operator_prefix);
+                                        }
                                         piece
                                     }
                                     Err(err) if is_tool_loop_cancelled(&err) => {
+                                        let _ = crate::agent::bounded_dag_live::store_dag_fail(
+                                            mem.as_ref(),
+                                            session_id.as_str(),
+                                            &crate::agent::bounded_dag_live::cancelled_fail_cursor(
+                                                &node.id,
+                                                index,
+                                                dag.id.as_str(),
+                                            ),
+                                        )
+                                        .await;
                                         security.set_graph_scratch_rel(None);
                                         return Err(err);
                                     }
@@ -1616,10 +1651,12 @@ pub async fn run(
                                 .await
                                 {
                                     Ok(piece) => {
-                                        let notes = probe_cell
-                                            .lock()
-                                            .unwrap_or_else(|e| e.into_inner())
-                                            .drain_notices();
+                                        let (notes, close) = {
+                                            let mut g = probe_cell
+                                                .lock()
+                                                .unwrap_or_else(|e| e.into_inner());
+                                            (g.drain_notices(), g.hop_close())
+                                        };
                                         for note in notes {
                                             crate::agent::bounded_dag_delivery::print_operator_note(
                                                 &mut operator_prefix,
@@ -1627,9 +1664,40 @@ pub async fn run(
                                                 None,
                                             );
                                         }
+                                        if close == crate::agent::hop_stop::HopClose::PolicyDeny {
+                                            let _ = crate::agent::bounded_dag_live::store_dag_fail(
+                                                mem.as_ref(),
+                                                session_id.as_str(),
+                                                &crate::agent::bounded_dag_live::policy_deny_fail_cursor(
+                                                    &node.id, index, dag.id.as_str(),
+                                                ),
+                                            )
+                                            .await;
+                                            security.set_graph_scratch_rel(None);
+                                            crate::agent::bounded_dag_delivery::print_operator_note(
+                                                &mut operator_prefix,
+                                                &crate::agent::bounded_dag_live::format_work_node_stop(
+                                                    &user_input,
+                                                    &node.id,
+                                                    "repeated policy denials of the same class",
+                                                    index + 1,
+                                                    node_count,
+                                                ),
+                                                Some(&fold_cache),
+                                            );
+                                            return Ok(operator_prefix);
+                                        }
                                         piece
                                     }
                                     Err(err) if is_tool_loop_cancelled(&err) => {
+                                        let _ = crate::agent::bounded_dag_live::store_dag_fail(
+                                            mem.as_ref(),
+                                            session_id.as_str(),
+                                            &crate::agent::bounded_dag_live::cancelled_fail_cursor(
+                                                &node.id, index, dag.id.as_str(),
+                                            ),
+                                        )
+                                        .await;
                                         security.set_graph_scratch_rel(None);
                                         return Err(err);
                                     }
@@ -1895,6 +1963,16 @@ pub async fn run(
                 crate::agent::turn_cancel::TurnFinish::Completed(resp) => resp,
                 crate::agent::turn_cancel::TurnFinish::Cancelled => {
                     eprintln!("{}\n", crate::agent::turn_cancel::STOPPED_USER_MESSAGE);
+                    if persist_chat_session && !chat_store_id.is_empty() {
+                        let _ = crate::agent::session_resume::append_user_assistant_turn(
+                            &config.workspace_dir,
+                            &chat_store_id,
+                            &user_input,
+                            crate::agent::turn_cancel::STOPPED_USER_MESSAGE,
+                            Some(turn_model.as_str()),
+                        )
+                        .await;
+                    }
                     continue;
                 }
                 crate::agent::turn_cancel::TurnFinish::Failed(e) => {

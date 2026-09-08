@@ -351,9 +351,8 @@ pub fn reset_chat_scope(
 
 /// Map node `model_selector.capabilities` to a `hint:` id or the session default.
 ///
-/// Live bounded-DAG work nodes should pass `explicit_model = None` so the
-/// session picker stays the **planner** default and does not flatten Contact.
-/// CLI `--model` / Web picker still set `default_model` for the planner turn.
+/// Planner / Plan-preview still use capability Contact. Live **work** hops pass
+/// the session picker as `explicit_model` via [`contact_for_live_node`].
 /// Does not enable `host_decide` / CAP live.
 pub fn contact_for_node(
     node: &DagNode,
@@ -396,7 +395,8 @@ pub fn contact_for_node(
     }
 }
 
-/// After hop fail strategy: stay on session default instead of the failed hint.
+/// Live work hop: session picker is the default model (VL-NA-043).
+/// Capability hints apply only after [`force_default`] fail-strategy (peer / retry).
 pub fn contact_for_live_node(
     node: &DagNode,
     default_model: &str,
@@ -410,7 +410,11 @@ pub fn contact_for_live_node(
             capabilities: node.model_selector.capabilities.clone(),
         };
     }
-    contact_for_node(node, default_model, available_hints, None)
+    let session = default_model.trim();
+    if session.is_empty() {
+        return contact_for_node(node, default_model, available_hints, None);
+    }
+    contact_for_node(node, default_model, available_hints, Some(session))
 }
 
 #[cfg(test)]
@@ -458,6 +462,28 @@ mod tests {
         );
         assert_eq!(c.model, "nvidia/nemotron");
         assert_eq!(c.reason, "explicit_user_pick");
+    }
+
+    #[test]
+    fn live_work_hop_uses_session_model_not_coding_hint() {
+        let dag = parse_dag_json(CODE_FIX_TEMPLATE_JSON).unwrap();
+        let locate = dag.nodes.iter().find(|n| n.id == "locate").unwrap();
+        let c = contact_for_live_node(
+            locate,
+            "nvidia/nemotron-3-ultra-550b-a55b",
+            &["code".into(), "fast".into()],
+            false,
+        );
+        assert_eq!(c.model, "nvidia/nemotron-3-ultra-550b-a55b");
+        assert_eq!(c.reason, "explicit_user_pick");
+        let retried = contact_for_live_node(
+            locate,
+            "nvidia/nemotron-3-ultra-550b-a55b",
+            &["code".into()],
+            true,
+        );
+        assert_eq!(retried.reason, "fail_strategy:default_model");
+        assert_eq!(retried.model, "nvidia/nemotron-3-ultra-550b-a55b");
     }
 
     #[test]

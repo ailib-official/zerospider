@@ -458,6 +458,14 @@ impl Agent {
         self.hop_probes.clear();
     }
 
+    fn session_work_model(&self) -> &str {
+        self.explicit_model
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or(self.model_name.as_str())
+    }
+
     fn dag_contact_labels(
         &self,
         dag: &crate::agent::dag_runner::DagManifest,
@@ -467,7 +475,7 @@ impl Agent {
             self.provider.as_ref(),
             dag,
             order,
-            &self.model_name,
+            self.session_work_model(),
             &self.available_hints,
         )
     }
@@ -1055,7 +1063,7 @@ impl Agent {
                 }
                 let contact = crate::agent::bounded_dag_context::contact_for_live_node(
                     &node,
-                    &self.model_name,
+                    self.session_work_model(),
                     &self.available_hints,
                     force_default,
                 );
@@ -1104,9 +1112,38 @@ impl Agent {
                 let text = match self.invoke_tool_loop_resolved(contact.model.clone()).await {
                     Ok(text) => {
                         self.flush_hop_probe_notices(&probe_rc, &mut operator_prefix);
+                        let close = probe_rc.lock().map(|g| g.hop_close()).unwrap_or_default();
+                        if close == crate::agent::hop_stop::HopClose::PolicyDeny {
+                            let _ = crate::agent::bounded_dag_live::store_dag_fail(
+                                self.memory.as_ref(),
+                                self.session_id.as_str(),
+                                &crate::agent::bounded_dag_live::policy_deny_fail_cursor(
+                                    &node.id, index, &dag_id,
+                                ),
+                            )
+                            .await;
+                            let stop = format_work_node_stop(
+                                user_message,
+                                &node.id,
+                                "repeated policy denials of the same class",
+                                index + 1,
+                                node_count,
+                            );
+                            self.push_operator_note(&mut operator_prefix, &stop);
+                            self.end_live_graph_host_state();
+                            return Ok(operator_prefix);
+                        }
                         text
                     }
                     Err(err) if is_tool_loop_cancelled(&err) => {
+                        let _ = crate::agent::bounded_dag_live::store_dag_fail(
+                            self.memory.as_ref(),
+                            self.session_id.as_str(),
+                            &crate::agent::bounded_dag_live::cancelled_fail_cursor(
+                                &node.id, index, &dag_id,
+                            ),
+                        )
+                        .await;
                         self.current_hop_probe = None;
                         self.security.set_graph_scratch_rel(None);
                         return Err(err);
