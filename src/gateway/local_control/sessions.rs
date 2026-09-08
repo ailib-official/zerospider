@@ -285,6 +285,16 @@ pub fn is_acceptable_generated_title(title: &str) -> bool {
     !WEAK.contains(&lower.as_str())
 }
 
+/// First persisted user body only (VL-NA-043): ignore later interrupt follow-ups.
+#[must_use]
+pub fn title_refine_seed(messages: &[ChatMessageInput]) -> String {
+    messages
+        .iter()
+        .find(|m| m.role == "user" && !m.content.trim().is_empty())
+        .map(|m| truncate_body(m.content.trim(), 400))
+        .unwrap_or_default()
+}
+
 /// Compact transcript of the first N user turns (plus replies) for a title prompt.
 pub fn title_refine_transcript(messages: &[ChatMessageInput], max_user_turns: usize) -> String {
     let mut out = String::new();
@@ -388,6 +398,18 @@ mod tests {
         assert!(t.contains("u3"));
         assert!(t.contains("a3"));
         assert!(!t.contains("u4"));
+    }
+
+    #[test]
+    fn title_refine_seed_is_first_user_only() {
+        let msgs = vec![
+            user("check piubt git remotes"),
+            assistant("Stopped."),
+            user("为什么中断了？查找错误，重新执行任务"),
+        ];
+        let seed = title_refine_seed(&msgs);
+        assert!(seed.contains("piubt git"));
+        assert!(!seed.contains("中断"));
     }
 
     #[tokio::test]

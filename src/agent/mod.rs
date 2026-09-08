@@ -38,6 +38,7 @@ pub mod dispatcher;
 pub mod double_esc;
 #[cfg(feature = "ai-protocol")]
 pub mod envelope_pilot;
+pub mod hop_stop;
 pub mod host_phase;
 #[cfg(feature = "ai-protocol")]
 pub mod intent_route;

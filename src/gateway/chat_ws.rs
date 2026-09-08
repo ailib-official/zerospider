@@ -3,7 +3,8 @@
 
 use super::local_control::auth::{check_pairing_auth, unauthorized_response};
 use super::local_control::runner::{
-    chunk_text_for_stream, persist_chat_turn, run_agent_chat, user_facing_turn_error,
+    chunk_text_for_stream, persist_assistant_message, persist_user_message, run_agent_chat,
+    user_facing_turn_error,
 };
 use super::local_control::types::{ChatApiRequest, WsClientMessage, WsDagNode, WsServerMessage};
 use super::AppState;
@@ -246,6 +247,16 @@ async fn handle_ws_socket(socket: WebSocket, state: AppState) {
         });
 
         let cancel = CancellationToken::new();
+        if let Err(e) = persist_user_message(
+            &config,
+            req.session_id.as_deref(),
+            &req,
+            Some(state.session_title_hub.clone()),
+        )
+        .await
+        {
+            tracing::warn!("session persist user failed: {e:#}");
+        }
         let (progress_tx, mut progress_rx) = tokio::sync::mpsc::channel(128);
         let mut chat_fut = Box::pin(run_agent_chat(
             &config,
@@ -300,12 +311,11 @@ async fn handle_ws_socket(socket: WebSocket, state: AppState) {
 
         match classify_turn_result(chat_result) {
             TurnFinish::Completed(resp) => {
-                if let Err(e) = persist_chat_turn(
+                if let Err(e) = persist_assistant_message(
                     &config,
                     req.session_id.as_deref(),
                     &req,
                     &resp.content,
-                    Some(state.session_title_hub.clone()),
                 )
                 .await
                 {
@@ -334,6 +344,16 @@ async fn handle_ws_socket(socket: WebSocket, state: AppState) {
                 }
             }
             TurnFinish::Cancelled => {
+                if let Err(e) = persist_assistant_message(
+                    &config,
+                    req.session_id.as_deref(),
+                    &req,
+                    crate::agent::turn_cancel::STOPPED_USER_MESSAGE,
+                )
+                .await
+                {
+                    tracing::warn!("session persist cancelled tombstone failed: {e:#}");
+                }
                 let frame = WsServerMessage::Cancelled {
                     message: Some(crate::agent::turn_cancel::STOPPED_USER_MESSAGE.into()),
                 };

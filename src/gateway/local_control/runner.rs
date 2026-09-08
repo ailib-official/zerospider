@@ -188,7 +188,8 @@ fn seed_prior_messages(agent: &mut Agent, messages: &[ChatMessageInput]) -> Resu
 
 /// Append the latest user turn and assistant reply to a persisted session, if `session_id` is set.
 ///
-/// Callers must not invoke this for cancelled turns (`TurnFinish::Cancelled`).
+/// User text is persisted at turn start (Web) so a cancel still keeps the original prompt.
+/// Completed turns append the assistant; cancelled turns append `Stopped.`.
 ///
 /// After the first persisted user turn, schedules a **background** title completion (does not
 /// block the chat `done` frame). Model preference: local (ollama / llamacpp /
@@ -200,36 +201,57 @@ pub async fn persist_chat_turn(
     assistant_content: &str,
     title_hub: Option<Arc<SessionTitleHub>>,
 ) -> Result<()> {
+    persist_user_message(config, session_id, req, title_hub.clone()).await?;
+    persist_assistant_message(config, session_id, req, assistant_content).await
+}
+
+pub async fn persist_user_message(
+    config: &Config,
+    session_id: Option<&str>,
+    req: &ChatApiRequest,
+    title_hub: Option<Arc<SessionTitleHub>>,
+) -> Result<()> {
     let Some(id) = session_id.map(str::trim).filter(|s| !s.is_empty()) else {
         return Ok(());
     };
 
     let user_message = extract_last_user_message(&req.messages)?;
     let store = ChatSessionStore::new(&config.workspace_dir);
-    let to_store = vec![
-        ChatMessageInput {
-            role: "user".into(),
-            content: user_message,
-        },
-        ChatMessageInput {
-            role: "assistant".into(),
-            content: assistant_content.to_string(),
-        },
-    ];
+    let to_store = vec![ChatMessageInput {
+        role: "user".into(),
+        content: user_message,
+    }];
     let append = store
         .append_messages(id, &to_store, req.model_id.as_deref())
         .await?;
 
-    if append.needs_title_refine {
-        // Claim the one-shot refine slot before spawn so a later turn cannot double-fire.
-        if store.mark_title_refined(id).await.is_ok() {
-            let config = config.clone();
-            let session_id = id.to_string();
-            tokio::spawn(async move {
-                refine_session_title_background(config, session_id, title_hub.clone()).await;
-            });
-        }
+    if append.needs_title_refine && store.mark_title_refined(id).await.is_ok() {
+        let config = config.clone();
+        let session_id = id.to_string();
+        tokio::spawn(async move {
+            refine_session_title_background(config, session_id, title_hub.clone()).await;
+        });
     }
+    Ok(())
+}
+
+pub async fn persist_assistant_message(
+    config: &Config,
+    session_id: Option<&str>,
+    req: &ChatApiRequest,
+    assistant_content: &str,
+) -> Result<()> {
+    let Some(id) = session_id.map(str::trim).filter(|s| !s.is_empty()) else {
+        return Ok(());
+    };
+    let store = ChatSessionStore::new(&config.workspace_dir);
+    let to_store = vec![ChatMessageInput {
+        role: "assistant".into(),
+        content: assistant_content.to_string(),
+    }];
+    store
+        .append_messages(id, &to_store, req.model_id.as_deref())
+        .await?;
     Ok(())
 }
 
@@ -325,16 +347,14 @@ async fn refine_session_title_background(
         return;
     };
 
-    let transcript = super::sessions::title_refine_transcript(
-        &session.messages,
-        super::sessions::TITLE_REFINE_AFTER_USER_TURNS,
-    );
-    if transcript.trim().is_empty() {
+    let seed = super::sessions::title_refine_seed(&session.messages);
+    if seed.trim().is_empty() {
         return;
     }
 
-    let user_prompt =
-        format!("Summarize this conversation into a short session title:\n\n{transcript}");
+    let user_prompt = format!(
+        "Name this chat from the original user task only. Ignore stop/interrupt follow-ups.\n\n{seed}"
+    );
     let candidates = title_refine_model_candidates(&config);
 
     for logical in candidates {

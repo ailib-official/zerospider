@@ -686,6 +686,12 @@ pub(crate) async fn run_tool_call_loop(
                 g.record_executed_round();
             });
         }
+        for out in &batch_outputs {
+            with_probe(soft_fail, &mut local_probe, |g| {
+                g.note_shell_output(out);
+            });
+        }
+        let hop_close = with_probe(soft_fail, &mut local_probe, |g| g.hop_close());
         let individual_results = batch_outputs;
 
         for (call, result) in tool_calls.iter().zip(individual_results.iter()) {
@@ -711,6 +717,22 @@ pub(crate) async fn run_tool_call_loop(
             for (native_call, result) in native_tool_calls.iter().zip(individual_results.iter()) {
                 history.push(ChatMessage::tool_with_call_id(&native_call.id, result));
             }
+        }
+        if hop_close != crate::agent::hop_stop::HopClose::None {
+            let notice = match hop_close {
+                crate::agent::hop_stop::HopClose::Cap => {
+                    crate::agent::probe_dedup::SHELL_ROUND_CAP_NOTICE
+                }
+                crate::agent::hop_stop::HopClose::PolicyDeny => {
+                    "Host stopped this hop after repeated policy denials of the same class."
+                }
+                crate::agent::hop_stop::HopClose::None => "",
+            };
+            let mut closing = visible_text.trim().to_string();
+            if closing.is_empty() {
+                closing = notice.to_string();
+            }
+            return Ok(closing);
         }
     }
 
