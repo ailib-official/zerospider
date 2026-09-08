@@ -50,12 +50,23 @@ impl Tool for FileReadTool {
     async fn execute(
         &self,
         args: serde_json::Value,
-        _ctx: &ToolExecutionContext,
+        ctx: &ToolExecutionContext,
     ) -> anyhow::Result<ToolResult> {
         let path = args
             .get("path")
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("Missing 'path' parameter"))?;
+
+        if let Err(reason) = self
+            .security
+            .validate_secret_path_access(path, ctx.human_shell_approved)
+        {
+            return Ok(ToolResult {
+                success: false,
+                output: String::new(),
+                error: Some(reason),
+            });
+        }
 
         if self.security.is_rate_limited() {
             return Ok(ToolResult {
@@ -235,6 +246,56 @@ mod tests {
     fn file_read_name() {
         let tool = FileReadTool::new(test_security(std::env::temp_dir()));
         assert_eq!(tool.name(), "file_read");
+    }
+
+    #[tokio::test]
+    async fn file_read_secret_basename_denied_without_approval() {
+        let dir = std::env::temp_dir().join("velaclaw_test_file_read_secret");
+        let _ = tokio::fs::create_dir_all(&dir).await;
+        let tool = FileReadTool::new(test_security(dir));
+        let result = tool
+            .execute(
+                json!({"path": "github_token_list.txt"}),
+                &ToolExecutionContext::default(),
+            )
+            .await
+            .unwrap();
+        assert!(!result.success);
+        let err = result.error.unwrap_or_default();
+        assert!(err.contains("[policy_deny]"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn file_read_secret_basename_ask_allows_when_approved() {
+        let dir = std::env::temp_dir().join("velaclaw_test_file_read_secret_ask");
+        let _ = tokio::fs::create_dir_all(&dir).await;
+        tokio::fs::write(dir.join("github_token_list.txt"), "no-token-here\n")
+            .await
+            .unwrap();
+        let tool = FileReadTool::new(PolicyHandle::new(SecurityPolicy {
+            autonomy: AutonomyLevel::Full,
+            workspace_dir: dir,
+            workspace_only: true,
+            secret_path_mode: crate::security::SecretPathMode::Ask,
+            ..SecurityPolicy::default()
+        }));
+        let denied = tool
+            .execute(
+                json!({"path": "github_token_list.txt"}),
+                &ToolExecutionContext::default(),
+            )
+            .await
+            .unwrap();
+        assert!(!denied.success);
+        let allowed = tool
+            .execute(
+                json!({"path": "github_token_list.txt"}),
+                &ToolExecutionContext::with_shell_human_approved(true),
+            )
+            .await
+            .unwrap();
+        assert!(allowed.success, "{:?}", allowed.error);
+        assert!(!allowed.output.contains("ghp_"));
     }
 
     #[test]

@@ -27,7 +27,7 @@ static SENSITIVE_KV_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 /// Scrub credentials from tool output to prevent accidental exfiltration.
 pub fn scrub_credentials(input: &str) -> String {
     let _ = &*SENSITIVE_KEY_PATTERNS;
-    SENSITIVE_KV_REGEX
+    let after_kv = SENSITIVE_KV_REGEX
         .replace_all(input, |caps: &regex::Captures| {
             let full_match = &caps[0];
             let key = &caps[1];
@@ -56,7 +56,16 @@ pub fn scrub_credentials(input: &str) -> String {
                 format!("{key}: {prefix}*[REDACTED]")
             }
         })
-        .to_string()
+        .to_string();
+    scrub_token_literals(&after_kv)
+}
+
+fn scrub_token_literals(input: &str) -> String {
+    static PAT: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}")
+            .expect("token literal regex")
+    });
+    PAT.replace_all(input, "[REDACTED_TOKEN]").into_owned()
 }
 
 /// Map common DSML / model parameter aliases to tool schema keys.
@@ -90,6 +99,14 @@ mod tests {
         let scrubbed = scrub_credentials(input);
         assert!(scrubbed.contains("*[REDACTED]"), "{scrubbed}");
         assert!(!scrubbed.contains("sk-abcdefghijklmnopqrstuvwxyz"));
+    }
+
+    #[test]
+    fn scrub_credentials_redacts_ghp_literal() {
+        let tok = format!("ghp_{}", "A".repeat(36));
+        let out = scrub_credentials(&format!("printed {tok}"));
+        assert!(!out.contains(&tok), "{out}");
+        assert!(out.contains("[REDACTED_TOKEN]"));
     }
 
     #[test]

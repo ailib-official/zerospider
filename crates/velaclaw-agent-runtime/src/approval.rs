@@ -314,15 +314,18 @@ impl<'a, B: HumanApprovalBackend + ?Sized> ApprovalGate<'a, B> {
 pub fn is_shell_policy_tool(tool_name: &str) -> bool {
     matches!(
         tool_name,
-        "shell" | "cron_add" | "cron_update" | "cron_run" | "schedule"
+        "shell" | "cron_add" | "cron_update" | "cron_run" | "schedule" | "file_read" | "file_write"
     )
 }
 
 pub fn shell_command_from_args<'a>(tool_name: &str, args: &'a Value) -> Option<&'a str> {
-    if !is_shell_policy_tool(tool_name) {
-        return None;
+    match tool_name {
+        "file_read" | "file_write" => args.get("path").and_then(|v| v.as_str()),
+        "shell" | "cron_add" | "cron_update" | "cron_run" | "schedule" => {
+            args.get("command").and_then(|v| v.as_str())
+        }
+        _ => None,
     }
-    args.get("command").and_then(|v| v.as_str())
 }
 
 #[cfg(test)]
@@ -376,8 +379,8 @@ mod tests {
         let backend = AllowAll;
         let gate = ApprovalGate::new(&backend, Some(&DenyShellHook));
         let call = ParsedToolCall {
-            name: "file_read".into(),
-            arguments: json!({"path": "x"}),
+            name: "glob_search".into(),
+            arguments: json!({"pattern": "*"}),
             tool_call_id: None,
         };
         assert_eq!(
@@ -392,5 +395,10 @@ mod tests {
     fn shell_command_extracted_from_args() {
         let args = json!({"command": "echo hi"});
         assert_eq!(shell_command_from_args("shell", &args), Some("echo hi"));
+        let path_args = json!({"path": "notes.md"});
+        assert_eq!(
+            shell_command_from_args("file_read", &path_args),
+            Some("notes.md")
+        );
     }
 }

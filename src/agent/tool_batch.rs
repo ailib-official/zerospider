@@ -7,13 +7,15 @@ use crate::approval::{
     ApprovalGate, ApprovalHub, ApprovalManager, ChannelApprovalSession, GateDecision, HumanInputHub,
 };
 use crate::observability::{Observer, ObserverEvent};
-use crate::security::PolicyHandle;
+use crate::security::{PolicyHandle, ReceiptDecision, ToolReceiptLog};
 use crate::tools::{Tool, ToolExecutionContext};
 use anyhow::Result;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio_util::sync::CancellationToken;
-use velaclaw_agent_runtime::{is_shell_policy_tool, normalize_tool_arguments, ToolLoopCancelled};
+use velaclaw_agent_runtime::{
+    is_shell_policy_tool, normalize_tool_arguments, shell_command_from_args, ToolLoopCancelled,
+};
 
 pub(crate) use velaclaw_agent_runtime::scrub_credentials;
 
@@ -159,7 +161,8 @@ async fn execute_one_tool(
             let output = if r.success {
                 scrub_credentials(&r.output)
             } else {
-                format!("Error: {}", r.error.unwrap_or_else(|| r.output))
+                let raw = r.error.unwrap_or_else(|| r.output);
+                format!("Error: {}", scrub_credentials(&raw))
             };
             let expand = crate::agent::turn_progress::progress_expand_body(&output);
             observer.record_event(&ObserverEvent::ToolCall {
@@ -175,7 +178,7 @@ async fn execute_one_tool(
             })
         }
         Err(e) => {
-            let output = format!("Error executing {call_name}: {e}");
+            let output = scrub_credentials(&format!("Error executing {call_name}: {e}"));
             let expand = crate::agent::turn_progress::progress_expand_body(&output);
             observer.record_event(&ObserverEvent::ToolCall {
                 tool: call_name.to_string(),
@@ -335,6 +338,7 @@ async fn execute_tools_sequential_with_gate(
     cancellation_token: Option<&CancellationToken>,
     extras: Option<&ToolBatchGateExtras>,
     host_phase: HostPhase,
+    policy: Option<&PolicyHandle>,
 ) -> Result<Vec<ToolBatchResult>> {
     let human_input_hub = extras
         .and_then(|e| e.human_input_hub.as_ref())
@@ -376,8 +380,9 @@ async fn execute_tools_sequential_with_gate(
 
         let (shell_human_approved, proceed) = match decision {
             GateDecision::Denied { message } => {
+                record_gate_denied(policy, &call.name, &call.arguments);
                 results.push(ToolBatchResult {
-                    output: message,
+                    output: scrub_credentials(&message),
                     success: false,
                 });
                 (false, false)
@@ -430,9 +435,10 @@ async fn execute_tools_sequential_with_gate(
                 };
                 match elevation {
                     GateDecision::Denied { message } => {
+                        record_gate_denied(policy, &call.name, &call.arguments);
                         results.pop();
                         results.push(ToolBatchResult {
-                            output: message,
+                            output: scrub_credentials(&message),
                             success: false,
                         });
                     }
@@ -474,6 +480,17 @@ async fn execute_tools_sequential_with_gate(
     }
 
     Ok(results)
+}
+
+fn record_gate_denied(policy: Option<&PolicyHandle>, tool_name: &str, args: &serde_json::Value) {
+    let Some(policy) = policy else {
+        return;
+    };
+    let summary = shell_command_from_args(tool_name, args).unwrap_or(tool_name);
+    let log = ToolReceiptLog::in_workspace(&policy.workspace_dir());
+    if let Err(e) = log.record(tool_name, ReceiptDecision::Deny, summary, "gate", false) {
+        tracing::warn!("tool receipt write failed: {e}");
+    }
 }
 
 fn should_retry_shell_elevation(call_name: &str, result: &ToolBatchResult) -> bool {
@@ -540,6 +557,7 @@ pub(crate) async fn execute_tool_batch(
             cancellation_token,
             gate_extras,
             host_phase,
+            policy.as_ref(),
         )
         .await
     } else {
@@ -711,6 +729,53 @@ mod tests {
         .await
         .expect_err("cancel must not return tool results");
         assert!(crate::agent::loop_::is_tool_loop_cancelled(&err));
+    }
+
+    #[tokio::test]
+    async fn gate_denied_secret_path_writes_receipt() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut approval_cfg = AutonomyConfig::default();
+        approval_cfg.level = crate::security::AutonomyLevel::Full;
+        approval_cfg.always_ask.clear();
+        let approval_mgr = ApprovalManager::from_config(&approval_cfg);
+        let policy = PolicyHandle::new(crate::security::SecurityPolicy {
+            autonomy: crate::security::AutonomyLevel::Full,
+            workspace_dir: tmp.path().to_path_buf(),
+            allowed_commands: vec!["cat".into()],
+            secret_path_mode: crate::security::SecretPathMode::Deny,
+            ..crate::security::SecurityPolicy::default()
+        });
+        let calls = vec![ParsedToolCall {
+            name: "shell".to_string(),
+            arguments: serde_json::json!({"command": "cat github_token_list.txt"}),
+        }];
+        let observer = crate::observability::NoopObserver;
+        let results = execute_tool_batch(
+            &calls,
+            &[],
+            &observer,
+            Some(&approval_mgr),
+            Some(&policy),
+            "cli",
+            None,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        assert_eq!(results.len(), 1);
+        assert!(!results[0].success);
+        assert!(
+            results[0].output.contains("[policy_deny]"),
+            "{}",
+            results[0].output
+        );
+        let body =
+            std::fs::read_to_string(tmp.path().join(".velaclaw/tool_receipts.jsonl")).unwrap();
+        assert!(body.contains("\"decision\":\"deny\""));
+        assert!(body.contains("github_token_list.txt"));
+        let tok = format!("ghp_{}", "C".repeat(36));
+        assert!(!body.contains(&tok));
     }
 
     #[test]

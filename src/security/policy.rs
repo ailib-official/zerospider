@@ -587,11 +587,36 @@ pub(crate) fn command_requires_privilege_hint(command: &str) -> bool {
         || lower.contains(" pkexec")
 }
 
+const MAX_SECRET_SCRIPT_BYTES: u64 = 64 * 1024;
+
 /// Credential / PAT / key files the agent must never dump into tool results.
 /// Matches path **basenames** (and a few well-known relative paths), not raw substrings
 /// (`raid_rsa` must not trip `id_rsa`).
 pub(crate) fn command_touches_secret_material(command: &str) -> bool {
-    for raw in command.split_whitespace() {
+    command_touches_secret_material_in(command, None)
+}
+
+pub(crate) fn command_touches_secret_material_in(command: &str, workspace: Option<&Path>) -> bool {
+    if text_touches_secret_material(command) {
+        return true;
+    }
+    let Some(workspace) = workspace else {
+        return false;
+    };
+    workspace_scripts_touch_secrets(command, workspace)
+}
+
+pub(crate) fn path_touches_secret_material(path: &str) -> bool {
+    text_touches_secret_material(path)
+}
+
+/// `bash|sh` wrappers whose body is not on argv — do not persist Always.
+pub(crate) fn command_invokes_posix_script(command: &str) -> bool {
+    !invoked_posix_script_paths(command).is_empty()
+}
+
+fn text_touches_secret_material(text: &str) -> bool {
+    for raw in text.split_whitespace() {
         let token = raw.trim_matches(|c| c == '\'' || c == '"' || c == '`');
         if token.is_empty() {
             continue;
@@ -609,6 +634,83 @@ pub(crate) fn command_touches_secret_material(command: &str) -> bool {
         }
         let base = lower.rsplit('/').next().unwrap_or(lower.as_str());
         if secret_basename(base) {
+            return true;
+        }
+    }
+    false
+}
+
+fn posix_shell_interpreter(base: &str) -> bool {
+    matches!(
+        base,
+        "bash" | "sh" | "dash" | "bash.exe" | "sh.exe" | "dash.exe"
+    )
+}
+
+fn invoked_posix_script_paths(command: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    for segment in split_unquoted_segments(command) {
+        let cmd_part = skip_env_assignments(&segment);
+        let mut words = cmd_part.split_whitespace();
+        let Some(base_raw) = words.next() else {
+            continue;
+        };
+        let token0 = base_raw.trim_matches(|c| c == '\'' || c == '"' || c == '`');
+        let base = token0
+            .rsplit('/')
+            .next()
+            .unwrap_or(token0)
+            .to_ascii_lowercase();
+        let source_dot = token0 == "." || base == "source";
+        if !posix_shell_interpreter(&base) && !source_dot {
+            continue;
+        }
+        for w in words {
+            let t = w.trim_matches(|c| c == '\'' || c == '"' || c == '`');
+            if t.is_empty() {
+                continue;
+            }
+            if t.starts_with('-') {
+                if posix_shell_interpreter(&base) && t.contains('c') {
+                    break;
+                }
+                continue;
+            }
+            out.push(t.to_string());
+            break;
+        }
+    }
+    out
+}
+
+fn workspace_scripts_touch_secrets(command: &str, workspace: &Path) -> bool {
+    let Ok(canon_ws) = workspace.canonicalize() else {
+        return false;
+    };
+    for rel in invoked_posix_script_paths(command) {
+        let candidate = Path::new(&rel);
+        let joined = if candidate.is_absolute() {
+            candidate.to_path_buf()
+        } else {
+            workspace.join(candidate)
+        };
+        let resolved = std::fs::canonicalize(&joined).unwrap_or(joined);
+        if !resolved.starts_with(&canon_ws) {
+            continue;
+        }
+        let Ok(meta) = std::fs::metadata(&resolved) else {
+            continue;
+        };
+        if !meta.is_file() {
+            continue;
+        }
+        if meta.len() > MAX_SECRET_SCRIPT_BYTES {
+            return true;
+        }
+        let Ok(body) = std::fs::read_to_string(&resolved) else {
+            continue;
+        };
+        if text_touches_secret_material(&body) {
             return true;
         }
     }
@@ -787,6 +889,31 @@ impl SecurityPolicy {
     // This ordering ensures deny-by-default: unknown commands are rejected
     // before any risk or autonomy logic runs.
 
+    fn command_or_path_touches_secrets(&self, command: &str) -> bool {
+        command_touches_secret_material_in(command, Some(self.workspace_dir.as_path()))
+    }
+
+    /// File-tool secret gate (same `secret_path_mode` as shell; no allowlist).
+    pub fn validate_secret_path_access(&self, path: &str, approved: bool) -> Result<(), String> {
+        if !path_touches_secret_material(path) {
+            return Ok(());
+        }
+        match self.secret_path_mode {
+            SecretPathMode::Allow => Ok(()),
+            SecretPathMode::Ask if approved => Ok(()),
+            SecretPathMode::Ask => Err(self.format_command_policy_error(
+                "Path names a credential file; approve Once to allow this invocation.",
+                path,
+                true,
+            )),
+            SecretPathMode::Deny => Err(self.format_command_policy_error(
+                "Path blocked: secret or credential file is not readable by the agent.",
+                path,
+                false,
+            )),
+        }
+    }
+
     /// Validate full command execution policy (allowlist + risk gate).
     pub fn validate_command_execution(
         &self,
@@ -809,8 +936,8 @@ impl SecurityPolicy {
             ));
         }
 
-        // Secret material: local Allow; isolated Ask (Once this execute); unset Deny.
-        if command_touches_secret_material(command) {
+        // Secret material: argv tokens, workspace bash/sh bodies, file tool paths.
+        if self.command_or_path_touches_secrets(command) {
             match self.secret_path_mode {
                 SecretPathMode::Allow => {}
                 SecretPathMode::Ask if approved => {}
@@ -998,7 +1125,8 @@ impl SecurityPolicy {
         } else {
             "[policy_deny]"
         };
-        let mut msg = format!("{kind} {headline}\n   Command: {command}");
+        let displayed = crate::security::redact_secret_literals(command);
+        let mut msg = format!("{kind} {headline}\n   Command: {displayed}");
         if approval_eligible {
             msg.push_str(
                 "\n\n   Interactive approval: [Y]es = run once, [A]lways = skip risk prompts for this \
@@ -1352,7 +1480,7 @@ self_adjust, use the `policy_patch` tool; otherwise edit config.toml (no silent 
              - If a tool fails, quote the exact error to the user in plain language and say what to change in `config.toml` — do not ask the user to edit source code.\n\
              - If a `<tool_result>` starts with `[sandbox_deny]` or `[needs_approval]`, wait for the human approval modal (Once/Always/No/Never). Do not invent a second tool.\n\
              - If a `<tool_result>` starts with `[policy_deny]`, do **not** retry equivalent `ls`/`find`/`cat` on the same path unless the operator changed allowlist/config.\n\
-             - Isolated GitHub CLI: invoke `gh` as the **first** executable (allowlisted). Auth is `GH_TOKEN`/`GITHUB_TOKEN` from the daemon environment when set. Do not prefix with `echo`/`env`/`git &&`. Never `cat` PAT/key files (`[policy_deny]`). Local profile inherits daemon env instead.\n\
+             - Isolated GitHub CLI: invoke `gh` as the **first** executable (allowlisted). Auth is `GH_TOKEN`/`GITHUB_TOKEN` from the daemon environment when set. Do not prefix with `echo`/`env`/`git &&`. Prefer `gh`; do not scan PAT/key lists. Credential paths require the ApprovalHub Once modal (`[needs_approval]`), not `request_human_input`. Local profile inherits daemon env instead.\n\
              - Optional local tool catalog: a workspace `tools/` directory (or symlink) when present.\n\n",
         );
     }
@@ -1808,6 +1936,64 @@ mod tests {
         assert!(p
             .validate_command_execution("cat /tmp/github_token_list.txt", true)
             .is_ok());
+    }
+
+    #[test]
+    fn bash_workspace_script_body_is_secret_touching() {
+        let tmp = tempfile::tempdir().unwrap();
+        let script = tmp.path().join("scan.sh");
+        std::fs::write(&script, "#!/bin/sh\ncat ~/github_token_list.txt\n").unwrap();
+        let p = SecurityPolicy {
+            autonomy: AutonomyLevel::Full,
+            workspace_dir: tmp.path().to_path_buf(),
+            allowed_commands: vec!["bash".into(), "sh".into(), "cat".into()],
+            secret_path_mode: SecretPathMode::Ask,
+            ..SecurityPolicy::default()
+        };
+        let cmd = format!("bash {}", script.display());
+        assert!(
+            command_touches_secret_material_in(&cmd, Some(tmp.path())),
+            "script body must count even without the basename on argv"
+        );
+        assert!(p
+            .validate_command_execution(&cmd, false)
+            .unwrap_err()
+            .contains("[needs_approval]"));
+        assert!(p.validate_command_execution(&cmd, true).is_ok());
+    }
+
+    #[test]
+    fn file_path_secret_access_follows_mode() {
+        let deny = SecurityPolicy {
+            secret_path_mode: SecretPathMode::Deny,
+            ..SecurityPolicy::default()
+        };
+        assert!(deny
+            .validate_secret_path_access("github_token_list.txt", true)
+            .unwrap_err()
+            .contains("[policy_deny]"));
+        let ask = SecurityPolicy {
+            secret_path_mode: SecretPathMode::Ask,
+            ..deny
+        };
+        assert!(ask
+            .validate_secret_path_access("github_token_list.txt", false)
+            .unwrap_err()
+            .contains("[needs_approval]"));
+        assert!(ask
+            .validate_secret_path_access("github_token_list.txt", true)
+            .is_ok());
+        assert!(ask.validate_secret_path_access("README.md", false).is_ok());
+    }
+
+    #[test]
+    fn echo_without_secret_basename_is_not_secret_touching() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("ok.sh"), "echo hello\n").unwrap();
+        assert!(!command_touches_secret_material_in(
+            "bash ok.sh",
+            Some(tmp.path())
+        ));
     }
 
     #[test]

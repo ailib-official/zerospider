@@ -31,6 +31,8 @@ All supervised tool execution paths use `ApprovalGate`:
 
 The shell tool schema **does not** expose an `approved` parameter. Human consent is injected internally after gate approval; models cannot self-approve.
 
+Credential files (`github_token_list.txt`, SSH key basenames, …) use this same gate (VL-SEC-013): argv tokens, workspace `bash`/`sh` script bodies, and `file_read`/`file_write` paths. Isolated profile **Ask** → Once; unset profile **Deny** has no modal. Gate `Denied` writes `ReceiptDecision::Deny`. Do not use `request_human_input` for PAT files.
+
 ### Three entry approval matrix
 
 | Entry | Supervised tool approval | Shell medium-risk confirmation | Notes |

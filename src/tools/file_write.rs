@@ -44,7 +44,7 @@ impl Tool for FileWriteTool {
     async fn execute(
         &self,
         args: serde_json::Value,
-        _ctx: &ToolExecutionContext,
+        ctx: &ToolExecutionContext,
     ) -> anyhow::Result<ToolResult> {
         let path = args
             .get("path")
@@ -55,6 +55,17 @@ impl Tool for FileWriteTool {
             .get("content")
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("Missing 'content' parameter"))?;
+
+        if let Err(reason) = self
+            .security
+            .validate_secret_path_access(path, ctx.human_shell_approved)
+        {
+            return Ok(ToolResult {
+                success: false,
+                output: String::new(),
+                error: Some(reason),
+            });
+        }
 
         if !self.security.can_act() {
             return Ok(ToolResult {

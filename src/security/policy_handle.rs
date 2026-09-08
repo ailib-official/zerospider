@@ -100,6 +100,10 @@ impl PolicyHandle {
         self.read().enforce_tool_operation(operation, tool_name)
     }
 
+    pub fn validate_secret_path_access(&self, path: &str, approved: bool) -> Result<(), String> {
+        self.read().validate_secret_path_access(path, approved)
+    }
+
     pub fn workspace_dir(&self) -> PathBuf {
         self.read().workspace_dir.clone()
     }
