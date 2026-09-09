@@ -262,8 +262,9 @@ impl ShellPolicyHook for PolicyHandleShellHook {
         arguments: &serde_json::Value,
         human_approved: bool,
     ) -> Result<(), String> {
+        crate::security::policy::admit_tool_invocation(tool_name, arguments)?;
         let Some(payload) = shell_command_from_args(tool_name, arguments) else {
-            return Ok(());
+            return Err(crate::security::policy::MALFORMED_INVOCATION_MARK.into());
         };
         if matches!(tool_name, "file_read" | "file_write") {
             return self.0.validate_secret_path_access(payload, human_approved);
@@ -284,8 +285,9 @@ impl ShellPolicyHook for SecurityPolicyShellHook<'_> {
         arguments: &serde_json::Value,
         human_approved: bool,
     ) -> Result<(), String> {
+        crate::security::policy::admit_tool_invocation(tool_name, arguments)?;
         let Some(payload) = shell_command_from_args(tool_name, arguments) else {
-            return Ok(());
+            return Err(crate::security::policy::MALFORMED_INVOCATION_MARK.into());
         };
         if matches!(tool_name, "file_read" | "file_write") {
             return self.0.validate_secret_path_access(payload, human_approved);

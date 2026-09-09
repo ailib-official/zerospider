@@ -79,7 +79,7 @@ impl HopProbeGovernor {
         };
         let n = self.policy_denies.entry(class).or_insert(0);
         *n = n.saturating_add(1);
-        if *n >= 2 {
+        if crate::agent::hop_stop::policy_deny_closes_on_first(class) || *n >= 2 {
             self.hop_close = HopClose::PolicyDeny;
         }
     }
@@ -318,5 +318,18 @@ mod tests {
         g.note_shell_output("unsafe shell construct (injection, redirect, or dangerous args).");
         g.note_shell_output("Command not allowed by security policy (not in allowed_commands).");
         assert_eq!(g.hop_close(), HopClose::None);
+    }
+
+    #[test]
+    fn malformed_or_once_denied_closes_on_first() {
+        let mut g = HopProbeGovernor::new();
+        g.note_shell_output("[policy_deny] malformed invocation: tool-call carrier in command.");
+        assert_eq!(g.hop_close(), HopClose::PolicyDeny);
+        let mut g2 = HopProbeGovernor::new();
+        g2.note_shell_output("[once_denied] Denied by user after shell-policy approval.");
+        assert_eq!(g2.hop_close(), HopClose::PolicyDeny);
+        let mut g3 = HopProbeGovernor::new();
+        g3.note_shell_output("Denied by user.");
+        assert_eq!(g3.hop_close(), HopClose::None);
     }
 }

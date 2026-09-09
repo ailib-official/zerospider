@@ -137,7 +137,7 @@ impl<'a, B: HumanApprovalBackend + ?Sized> ApprovalGate<'a, B> {
             }
         } else {
             GateDecision::Denied {
-                message: "Denied by user.".into(),
+                message: "[once_denied] Denied by user after shell-policy approval.".into(),
             }
         }
     }
@@ -231,7 +231,8 @@ impl<'a, B: HumanApprovalBackend + ?Sized> ApprovalGate<'a, B> {
                         }
                     } else {
                         GateDecision::Denied {
-                            message: "Denied by user.".into(),
+                            message: "[once_denied] Denied by user after shell-policy approval."
+                                .into(),
                         }
                     }
                 } else {
@@ -294,7 +295,8 @@ impl<'a, B: HumanApprovalBackend + ?Sized> ApprovalGate<'a, B> {
                         }
                     } else {
                         GateDecision::Denied {
-                            message: "Denied by user.".into(),
+                            message: "[once_denied] Denied by user after shell-policy approval."
+                                .into(),
                         }
                     }
                 } else {
@@ -400,5 +402,88 @@ mod tests {
             shell_command_from_args("file_read", &path_args),
             Some("notes.md")
         );
+    }
+
+    struct RejectShell;
+
+    #[async_trait]
+    impl HumanApprovalBackend for RejectShell {
+        fn needs_tool_approval(&self, _tool_name: &str) -> bool {
+            false
+        }
+        fn approve_tool_sync(&self, _: &str, _: &Value) -> bool {
+            true
+        }
+        async fn approve_tool_async(&self, _: &str, _: &Value) -> bool {
+            true
+        }
+        fn interactive_shell_approval(&self) -> bool {
+            true
+        }
+        fn approve_shell_command_sync(&self, _: &str) -> bool {
+            false
+        }
+        async fn approve_shell_command_async(&self, _: &str) -> bool {
+            false
+        }
+    }
+
+    struct RejectTool;
+
+    #[async_trait]
+    impl HumanApprovalBackend for RejectTool {
+        fn needs_tool_approval(&self, _tool_name: &str) -> bool {
+            true
+        }
+        fn approve_tool_sync(&self, _: &str, _: &Value) -> bool {
+            false
+        }
+        async fn approve_tool_async(&self, _: &str, _: &Value) -> bool {
+            false
+        }
+        fn interactive_shell_approval(&self) -> bool {
+            false
+        }
+        fn approve_shell_command_sync(&self, _: &str) -> bool {
+            true
+        }
+        async fn approve_shell_command_async(&self, _: &str) -> bool {
+            true
+        }
+    }
+
+    #[test]
+    fn shell_policy_user_deny_is_once_denied() {
+        let backend = RejectShell;
+        let gate = ApprovalGate::new(&backend, Some(&DenyShellHook));
+        let call = ParsedToolCall {
+            name: "shell".into(),
+            arguments: json!({"command": "apt update"}),
+            tool_call_id: None,
+        };
+        match gate.decide_sync(&call) {
+            GateDecision::Denied { message } => {
+                assert!(message.contains("[once_denied]"), "{message}");
+            }
+            other => panic!("expected deny, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn tool_level_user_deny_is_not_once_denied() {
+        let backend = RejectTool;
+        let gate = ApprovalGate::new(&backend, None);
+        let call = ParsedToolCall {
+            name: "glob_search".into(),
+            arguments: json!({"pattern": "*"}),
+            tool_call_id: None,
+        };
+        match gate.decide_sync(&call) {
+            GateDecision::Denied { message } => {
+                assert_eq!(message, "Denied by user.");
+                assert!(!message.contains("[once_denied]"));
+            }
+            other => panic!("expected deny, got {other:?}"),
+        }
     }
 }

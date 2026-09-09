@@ -43,8 +43,8 @@ pub use detect::{
 #[allow(unused_imports)]
 pub use pairing::PairingGuard;
 pub use policy::{
-    normalize_autonomy_config, AutonomyLevel, PolicyPromptExtras, SecretPathMode, SecurityPolicy,
-    ToolOperation,
+    admit_file_path, admit_shell_command, admit_tool_invocation, normalize_autonomy_config,
+    AutonomyLevel, PolicyPromptExtras, SecretPathMode, SecurityPolicy, ToolOperation,
 };
 pub use policy_handle::PolicyHandle;
 #[allow(unused_imports)]
