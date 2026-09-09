@@ -32,6 +32,12 @@ pub fn policy_deny_class(output: &str) -> Option<&'static str> {
     if t.contains("[needs_approval]") || t.contains("approve once") {
         return None;
     }
+    if t.contains("[once_denied]") {
+        return Some("once_denied");
+    }
+    if t.contains("malformed invocation") {
+        return Some("malformed");
+    }
     if t.contains("unsafe shell construct") {
         return Some("unsafe_construct");
     }
@@ -49,6 +55,12 @@ pub fn policy_deny_class(output: &str) -> Option<&'static str> {
     None
 }
 
+/// Classes that close the hop on the first deny (not two unlike buckets).
+#[must_use]
+pub fn policy_deny_closes_on_first(class: &str) -> bool {
+    matches!(class, "malformed" | "once_denied")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -64,5 +76,21 @@ mod tests {
     #[test]
     fn once_prompt_is_not_policy_deny_class() {
         assert!(policy_deny_class("[needs_approval] approve Once").is_none());
+    }
+
+    #[test]
+    fn malformed_and_once_denied_are_policy_classes() {
+        assert_eq!(
+            policy_deny_class("[policy_deny] malformed invocation: tool-call carrier in command."),
+            Some("malformed")
+        );
+        assert_eq!(
+            policy_deny_class("[once_denied] Denied by user after shell-policy approval."),
+            Some("once_denied")
+        );
+        assert!(policy_deny_closes_on_first("malformed"));
+        assert!(policy_deny_closes_on_first("once_denied"));
+        assert!(!policy_deny_closes_on_first("allowlist"));
+        assert_eq!(policy_deny_class("Denied by user."), None);
     }
 }

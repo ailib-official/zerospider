@@ -1,6 +1,7 @@
 use parking_lot::Mutex;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -588,6 +589,64 @@ pub(crate) fn command_requires_privilege_hint(command: &str) -> bool {
 }
 
 const MAX_SECRET_SCRIPT_BYTES: u64 = 64 * 1024;
+const MAX_ADMITTED_SHELL_BYTES: usize = 8192;
+const MAX_ADMITTED_PATH_BYTES: usize = 4096;
+
+/// Gate + execute share this deny token (VL-NA-044). Never Prompt Once.
+pub const MALFORMED_INVOCATION_MARK: &str = "[policy_deny] malformed invocation";
+
+/// Reject tool args that are still a model envelope, not a command or path.
+pub fn admit_tool_invocation(tool_name: &str, args: &Value) -> Result<(), String> {
+    match tool_name {
+        "file_read" | "file_write" => {
+            let path = args.get("path").and_then(Value::as_str).unwrap_or("");
+            admit_file_path(path)
+        }
+        "shell" | "cron_add" | "cron_update" | "cron_run" | "schedule" => {
+            let command = args.get("command").and_then(Value::as_str).unwrap_or("");
+            admit_shell_command(command)
+        }
+        _ => Ok(()),
+    }
+}
+
+/// Admit a shell `command` argument (GOV-007 with [`admit_tool_invocation`]).
+pub fn admit_shell_command(command: &str) -> Result<(), String> {
+    if command.trim().is_empty() {
+        return Err(malformed_invocation_error("empty command"));
+    }
+    if command.contains('\0') {
+        return Err(malformed_invocation_error("NUL in command"));
+    }
+    if crate::util::invocation_contains_carrier(command) {
+        return Err(malformed_invocation_error("tool-call carrier in command"));
+    }
+    if command.len() > MAX_ADMITTED_SHELL_BYTES {
+        return Err(malformed_invocation_error("command exceeds size cap"));
+    }
+    Ok(())
+}
+
+/// Admit a file-tool `path` only. `file_write` content is never a path or Once display.
+pub fn admit_file_path(path: &str) -> Result<(), String> {
+    if path.trim().is_empty() {
+        return Err(malformed_invocation_error("empty path"));
+    }
+    if path.contains('\0') || path.contains('\n') || path.contains('\r') {
+        return Err(malformed_invocation_error("path is not a single line"));
+    }
+    if crate::util::invocation_contains_carrier(path) {
+        return Err(malformed_invocation_error("tool-call carrier in path"));
+    }
+    if path.len() > MAX_ADMITTED_PATH_BYTES {
+        return Err(malformed_invocation_error("path exceeds size cap"));
+    }
+    Ok(())
+}
+
+fn malformed_invocation_error(detail: &str) -> String {
+    format!("{MALFORMED_INVOCATION_MARK}: {detail}.")
+}
 
 /// Credential / PAT / key files the agent must never dump into tool results.
 /// Matches path **basenames** (and a few well-known relative paths), not raw substrings
@@ -882,12 +941,12 @@ impl SecurityPolicy {
 
     // ── Command Execution Policy Gate ──────────────────────────────────────
     // Validation follows a strict precedence order:
-    //   1. Allowlist check (is the base command permitted at all?)
-    //   2. Risk classification (high / medium / low)
-    //   3. Policy flags (block_high_risk_commands, require_approval_for_medium_risk)
-    //   4. Autonomy level × approval status (supervised requires explicit approval)
-    // This ordering ensures deny-by-default: unknown commands are rejected
-    // before any risk or autonomy logic runs.
+    //   1. Read-only
+    //   2. Admit (carrier / shape / size) — never ApprovalHub
+    //   3. Unsafe shell constructs
+    //   4. Wait-only executables
+    //   5. Allowlist (human approval cannot widen)
+    //   6. Secret Ask / privilege Once (only if the invoke could still run)
 
     fn command_or_path_touches_secrets(&self, command: &str) -> bool {
         command_touches_secret_material_in(command, Some(self.workspace_dir.as_path()))
@@ -895,6 +954,7 @@ impl SecurityPolicy {
 
     /// File-tool secret gate (same `secret_path_mode` as shell; no allowlist).
     pub fn validate_secret_path_access(&self, path: &str, approved: bool) -> Result<(), String> {
+        admit_file_path(path)?;
         if !path_touches_secret_material(path) {
             return Ok(());
         }
@@ -928,6 +988,8 @@ impl SecurityPolicy {
             ));
         }
 
+        admit_shell_command(command)?;
+
         if !self.passes_shell_safety_gates(command) {
             return Err(self.format_command_policy_error(
                 "Command blocked: unsafe shell construct (injection, redirect, or dangerous args).",
@@ -936,7 +998,24 @@ impl SecurityPolicy {
             ));
         }
 
-        // Secret material: argv tokens, workspace bash/sh bodies, file tool paths.
+        if command_is_wait_only_executable(command) {
+            return Err(self.format_command_policy_error(
+                "Command blocked: wait-only executables (sleep/usleep) are not allowed.",
+                command,
+                false,
+            ));
+        }
+
+        // Hard allowlist: human approval cannot widen allowed_commands (VL-SEC-009 / H).
+        if !self.segments_are_allowlisted(command) {
+            return Err(self.format_command_policy_error(
+                "Command not allowed by security policy (not in allowed_commands).",
+                command,
+                false,
+            ));
+        }
+
+        // Secret material: argv tokens, workspace bash/sh bodies (after admission).
         if self.command_or_path_touches_secrets(command) {
             match self.secret_path_mode {
                 SecretPathMode::Allow => {}
@@ -956,23 +1035,6 @@ impl SecurityPolicy {
                     ));
                 }
             }
-        }
-
-        if command_is_wait_only_executable(command) {
-            return Err(self.format_command_policy_error(
-                "Command blocked: wait-only executables (sleep/usleep) are not allowed.",
-                command,
-                false,
-            ));
-        }
-
-        // Hard allowlist: human approval cannot widen allowed_commands (VL-SEC-009 / H).
-        if !self.segments_are_allowlisted(command) {
-            return Err(self.format_command_policy_error(
-                "Command not allowed by security policy (not in allowed_commands).",
-                command,
-                false,
-            ));
         }
 
         let risk = self.command_risk_level(command);
@@ -1984,6 +2046,60 @@ mod tests {
             .validate_secret_path_access("github_token_list.txt", true)
             .is_ok());
         assert!(ask.validate_secret_path_access("README.md", false).is_ok());
+    }
+
+    #[test]
+    fn dsml_carrier_in_shell_is_malformed_not_once() {
+        let p = SecurityPolicy {
+            autonomy: AutonomyLevel::Full,
+            allowed_commands: vec!["cat".into()],
+            secret_path_mode: SecretPathMode::Ask,
+            ..SecurityPolicy::default()
+        };
+        let tag = crate::util::DSML_TAG;
+        let cmd = format!("<{tag}tool_call> cat github_token_list.txt");
+        let err = p.validate_command_execution(&cmd, false).unwrap_err();
+        assert!(err.contains("malformed invocation"), "{err}");
+        assert!(!err.contains("[needs_approval]"), "{err}");
+        assert!(admit_tool_invocation("shell", &serde_json::json!({"command": cmd})).is_err());
+    }
+
+    #[test]
+    fn compound_whoami_is_allowlist_not_once() {
+        let p = SecurityPolicy {
+            autonomy: AutonomyLevel::Full,
+            allowed_commands: vec!["echo".into()],
+            secret_path_mode: SecretPathMode::Ask,
+            ..SecurityPolicy::default()
+        };
+        let err = p
+            .validate_command_execution("set -e; whoami; true", false)
+            .unwrap_err();
+        assert!(err.contains("not in allowed_commands"), "{err}");
+        assert!(!err.contains("[needs_approval]"), "{err}");
+    }
+
+    #[test]
+    fn file_write_content_secret_basename_does_not_ask() {
+        let ask = SecurityPolicy {
+            secret_path_mode: SecretPathMode::Ask,
+            ..SecurityPolicy::default()
+        };
+        assert!(admit_tool_invocation(
+            "file_write",
+            &serde_json::json!({
+                "path": "notes.md",
+                "content": "do not read github_token_list.txt"
+            })
+        )
+        .is_ok());
+        assert!(ask.validate_secret_path_access("notes.md", false).is_ok());
+        let blob = "#!/usr/bin/env python3\nprint('github_token_list.txt')\n".repeat(20);
+        assert!(admit_tool_invocation(
+            "file_write",
+            &serde_json::json!({"path": blob, "content": "x"})
+        )
+        .is_err());
     }
 
     #[test]

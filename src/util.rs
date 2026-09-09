@@ -55,27 +55,34 @@ pub fn truncate_with_ellipsis(s: &str, max_chars: usize) -> String {
     }
 }
 
+/// DeepSeek DSML delimiter (U+FF5C), same set as `strip_tool_call_markup`.
+pub(crate) const DSML_TAG: &str = "\u{FF5C}\u{FF5C}DSML\u{FF5C}\u{FF5C}";
+
+/// Open tags stripped from user-visible text; admit uses the same list.
+pub(crate) const TOOL_CALL_OPEN_TAGS: [&str; 9] = [
+    "<function_calls>",
+    "<function_call>",
+    "<tool_call>",
+    "<toolcall>",
+    "<tool-call>",
+    "<tool_request>",
+    "<tool>",
+    "<invoke>",
+    "<$call>",
+];
+
+/// True when `s` still contains a tool-call carrier (DSML delimiter or open tag).
+#[must_use]
+pub fn invocation_contains_carrier(s: &str) -> bool {
+    s.contains(DSML_TAG) || TOOL_CALL_OPEN_TAGS.iter().any(|tag| s.contains(tag))
+}
+
 /// Strip internal tool-invocation markup from user-visible agent text.
 ///
 /// Removes `<tool_call>`, `<tool_request>`, DSML wrappers, and related dialect
 /// tags so CLI/channel/Web UI users never see raw protocol scaffolding.
 #[must_use]
 pub fn strip_tool_call_markup(message: &str) -> String {
-    /// DeepSeek DSML delimiter (U+FF5C fullwidth vertical line), same as ai-lib-core.
-    const DSML_TAG: &str = "\u{FF5C}\u{FF5C}DSML\u{FF5C}\u{FF5C}";
-
-    const TOOL_CALL_OPEN_TAGS: [&str; 9] = [
-        "<function_calls>",
-        "<function_call>",
-        "<tool_call>",
-        "<toolcall>",
-        "<tool-call>",
-        "<tool_request>",
-        "<tool>",
-        "<invoke>",
-        "<$call>",
-    ];
-
     fn find_first_tag<'a>(haystack: &str, tags: &'a [&'a str]) -> Option<(usize, &'a str)> {
         tags.iter()
             .filter_map(|tag| haystack.find(tag).map(|idx| (idx, *tag)))
@@ -376,5 +383,12 @@ mod tests {
             format!("<tool_call>\n{{\"name\": \"shell\", \"command\": \"ssh x\"}}\n</{tag}>");
         let out = strip_tool_call_markup(&input);
         assert!(out.is_empty(), "out={out:?}");
+    }
+
+    #[test]
+    fn invocation_contains_carrier_matches_strip_tag_set() {
+        assert!(invocation_contains_carrier("<tool_call>"));
+        assert!(invocation_contains_carrier(DSML_TAG));
+        assert!(!invocation_contains_carrier("cat README.md"));
     }
 }
